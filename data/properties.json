@@ -1,0 +1,119 @@
+﻿{
+  "ownerEmail": "FPARDO1996@GMAIL.COM",
+  "currency": "CLP",
+  "properties": [
+    {
+      "id": "DEP-507",
+      "unit": "507",
+      "address": "COLON 6435 DP 507",
+      "commune": "La Cisterna",
+      "role": "2902-522",
+      "destination": "Habitacional",
+      "status": "Arrendado",
+      "tenant": "",
+      "monthlyRent": 0,
+      "rentDueDay": 5,
+      "notes": "Tasacion BCI: UF 2.829,14 / $112.399.327. Confirmar canon y arrendatario."
+    },
+    {
+      "id": "DEP-509",
+      "unit": "509",
+      "address": "MARIA 6470 509",
+      "commune": "La Cisterna",
+      "role": "703-88",
+      "destination": "Habitacional",
+      "status": "Arrendado",
+      "tenant": "",
+      "monthlyRent": 0,
+      "rentDueDay": 5,
+      "notes": "Credito Itaú rescatado desde PDF escaneado. Confirmar canon y arrendatario."
+    }
+  ],
+  "mortgages": [
+    {
+      "propertyId": "DEP-507",
+      "bank": "BCI",
+      "operation": "0614733",
+      "series": "0330250Z00",
+      "annualRate": 0.033,
+      "cae": 0.039,
+      "loanUf": 2261.47,
+      "currentBalanceUf": 2261.47,
+      "totalPayments": 300,
+      "paidPayments": 0,
+      "referenceDividendUf": 11.1608,
+      "referenceDividendClp": 473901,
+      "dueDay": 5,
+      "firstDueDate": "2026-08-05",
+      "insuranceMonthlyClp": 30029,
+      "notes": "Seguros BCI: desgravamen $5.360 e incendio/sismo $24.669 mensuales."
+    },
+    {
+      "propertyId": "DEP-509",
+      "bank": "Itaú",
+      "operation": "02162445",
+      "series": "02162445",
+      "annualRate": 0.0339,
+      "cae": null,
+      "loanUf": 1928.97,
+      "currentBalanceUf": 1920.7641,
+      "totalPayments": 300,
+      "paidPayments": 2,
+      "referenceDividendUf": 9.5382,
+      "referenceDividendClp": 0,
+      "dueDay": 10,
+      "firstDueDate": "2026-06-10",
+      "insuranceMonthlyClp": 0,
+      "notes": "PDF Itaú indica que los dividendos no incluyen primas de seguros. Próxima cuota estimada: 10/08/2026."
+    }
+  ],
+  "income": [],
+  "expenses": [
+    {
+      "id": "GOP-507-001",
+      "propertyId": "DEP-507",
+      "date": "2026-01-27",
+      "category": "Gastos operacionales",
+      "vendor": "BCI",
+      "detail": "Provision borrador de escritura 50%",
+      "amount": 89833,
+      "status": "Pagado"
+    },
+    {
+      "id": "GOP-507-002",
+      "propertyId": "DEP-507",
+      "date": "2026-01-27",
+      "category": "Gastos operacionales",
+      "vendor": "BCI",
+      "detail": "Provision borrador de escritura 50%",
+      "amount": 89833,
+      "status": "Pagado"
+    },
+    {
+      "id": "GOP-507-003",
+      "propertyId": "DEP-507",
+      "date": "2026-02-13",
+      "category": "Gastos operacionales",
+      "vendor": "BCI",
+      "detail": "Borrador de escritura 50%",
+      "amount": 89833,
+      "status": "Pagado"
+    },
+    {
+      "id": "GOP-507-004",
+      "propertyId": "DEP-507",
+      "date": "2026-06-03",
+      "category": "Gastos operacionales",
+      "vendor": "Conservador BNS Raices",
+      "detail": "Conservador / CBR",
+      "amount": 447300,
+      "status": "Pagado"
+    }
+  ],
+  "sources": [
+    "C:/Users/felipe.pardo/Downloads/PROPIEDAD 507 BCI/DesarrolloDeuda.pdf",
+    "C:/Users/felipe.pardo/Downloads/PROPIEDAD 507 BCI/Cae - Pardo Barrera.pdf",
+    "C:/Users/felipe.pardo/Downloads/PROPIEDAD 507 BCI/GastosOperacionales.pdf",
+    "C:/Users/felipe.pardo/Downloads/PROPIEDAD 509 ITAU.pdf"
+  ]
+}

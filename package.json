@@ -1,0 +1,17 @@
+﻿{
+  "name": "administracion-departamentos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de control de propiedades, arriendos, gastos y alertas hipotecarias.",
+  "type": "module",
+  "scripts": {
+    "start": "npx serve .",
+    "check": "node --check app.js && node --check scripts/send-reminders.mjs"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.16"
+  },
+  "devDependencies": {
+    "serve": "^14.2.4"
+  }
+}

@@ -1,0 +1,119 @@
+﻿<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Administracion de Departamentos</title>
+  <meta name="description" content="Control de propiedades, arriendos, dividendos y gastos operacionales." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Control patrimonial</p>
+      <h1>Administracion de Departamentos</h1>
+    </div>
+    <div class="top-actions">
+      <label class="month-picker">Mes <input id="monthFilter" type="month" /></label>
+      <button id="exportBackup" type="button">Exportar respaldo</button>
+      <label class="ghost-file">Importar respaldo<input id="importBackup" type="file" accept="application/json" /></label>
+    </div>
+  </header>
+
+  <main>
+    <section class="summary-grid" aria-label="Resumen financiero">
+      <article><span>Ingresos mes</span><strong id="kpiIncome">$0</strong></article>
+      <article><span>Gastos mes</span><strong id="kpiExpenses">$0</strong></article>
+      <article><span>Resultado mes</span><strong id="kpiNet">$0</strong></article>
+      <article><span>Alertas 15 dias</span><strong id="kpiAlerts">0</strong></article>
+    </section>
+
+    <section class="workspace">
+      <nav class="tabs" aria-label="Vistas">
+        <button class="active" data-tab="dashboard" type="button">Panel</button>
+        <button data-tab="properties" type="button">Propiedades</button>
+        <button data-tab="income" type="button">Arriendos</button>
+        <button data-tab="expenses" type="button">Gastos</button>
+        <button data-tab="mortgages" type="button">Dividendos</button>
+        <button data-tab="reports" type="button">Reportes</button>
+      </nav>
+
+      <section id="dashboard" class="tab-panel active">
+        <div class="split">
+          <section>
+            <div class="section-head"><h2>Proximos vencimientos</h2><button id="downloadCalendar" type="button">CSV</button></div>
+            <div id="alertsList" class="stack"></div>
+          </section>
+          <section>
+            <div class="section-head"><h2>Resultado por propiedad</h2><button id="downloadMonthly" type="button">CSV</button></div>
+            <div class="table-wrap"><table><thead><tr><th>Propiedad</th><th>Ingreso</th><th>Gasto</th><th>Resultado</th></tr></thead><tbody id="propertyResults"></tbody></table></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="properties" class="tab-panel">
+        <div class="section-head"><h2>Fichas de propiedades</h2><button id="saveProperties" type="button">Guardar cambios</button></div>
+        <div id="propertyCards" class="property-grid"></div>
+      </section>
+
+      <section id="income" class="tab-panel">
+        <div class="section-head"><h2>Ingresos por arriendo</h2><button data-open="incomeDialog" type="button">Agregar ingreso</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Propiedad</th><th>Arrendatario</th><th>Monto</th><th>Estado</th><th>Nota</th><th></th></tr></thead><tbody id="incomeRows"></tbody></table></div>
+      </section>
+
+      <section id="expenses" class="tab-panel">
+        <div class="section-head"><h2>Gastos operacionales</h2><button data-open="expenseDialog" type="button">Agregar gasto</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Propiedad</th><th>Categoria</th><th>Detalle</th><th>Monto</th><th>Estado</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div>
+      </section>
+
+      <section id="mortgages" class="tab-panel">
+        <div class="section-head"><h2>Creditos hipotecarios</h2><button id="saveMortgages" type="button">Guardar cambios</button></div>
+        <div id="mortgageCards" class="property-grid"></div>
+      </section>
+
+      <section id="reports" class="tab-panel">
+        <div class="section-head"><h2>Reportes</h2><button id="downloadAll" type="button">Exportar CSV completo</button></div>
+        <div class="report-grid">
+          <article><span>Total propiedades</span><strong id="reportProperties">0</strong></article>
+          <article><span>Dividendos UF mensual</span><strong id="reportMortgageUf">0</strong></article>
+          <article><span>Arriendos esperados</span><strong id="reportExpectedRent">$0</strong></article>
+          <article><span>Gastos registrados</span><strong id="reportExpensesAll">$0</strong></article>
+        </div>
+        <div class="note-box">
+          <h3>Alertas por correo</h3>
+          <p>El repositorio incluye una revision diaria que avisa 3 dias antes del vencimiento hipotecario. El receptor configurado es <strong>FPARDO1996@GMAIL.COM</strong>.</p>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <dialog id="incomeDialog">
+    <form method="dialog" id="incomeForm" class="entry-form">
+      <h2>Nuevo ingreso</h2>
+      <label>Fecha <input name="date" type="date" required /></label>
+      <label>Propiedad <select name="propertyId" required></select></label>
+      <label>Arrendatario <input name="tenant" /></label>
+      <label>Monto CLP <input name="amount" type="number" min="0" step="1000" required /></label>
+      <label>Estado <select name="status"><option>Pagado</option><option>Pendiente</option><option>Atrasado</option></select></label>
+      <label>Observacion <textarea name="notes"></textarea></label>
+      <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button value="default">Guardar</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="expenseDialog">
+    <form method="dialog" id="expenseForm" class="entry-form">
+      <h2>Nuevo gasto</h2>
+      <label>Fecha <input name="date" type="date" required /></label>
+      <label>Propiedad <select name="propertyId" required></select></label>
+      <label>Categoria <select name="category"><option>Dividendo</option><option>Contribuciones</option><option>Gastos comunes</option><option>Seguro</option><option>Mantencion</option><option>Reparacion</option><option>Gastos operacionales</option><option>Otro</option></select></label>
+      <label>Proveedor <input name="vendor" /></label>
+      <label>Detalle <input name="detail" /></label>
+      <label>Monto CLP <input name="amount" type="number" min="0" step="1000" required /></label>
+      <label>Estado <select name="status"><option>Pagado</option><option>Pendiente</option><option>Atrasado</option></select></label>
+      <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button value="default">Guardar</button></div>
+    </form>
+  </dialog>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>
