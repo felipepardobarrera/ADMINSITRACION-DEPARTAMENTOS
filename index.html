@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Administracion de Departamentos</title>
   <meta name="description" content="Control de propiedades, arriendos, dividendos y gastos operacionales." />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20260806-2" />
 </head>
 <body>
   <header class="topbar">
@@ -93,7 +93,7 @@
       <label>Fecha <input name="date" type="date" required /></label>
       <label>Propiedad <select name="propertyId" required></select></label>
       <label>Arrendatario <input name="tenant" /></label>
-      <label>Monto CLP <input name="amount" type="number" min="0" step="1" required /></label>
+      <label>Monto CLP <input name="amount" type="number" min="0" step="any" inputmode="numeric" required /></label>
       <label>Estado <select name="status"><option>Pagado</option><option>Pendiente</option><option>Atrasado</option></select></label>
       <label>Observacion <textarea name="notes"></textarea></label>
       <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button value="default">Guardar</button></div>
@@ -108,12 +108,12 @@
       <label>Categoria <select name="category"><option>Dividendo</option><option>Contribuciones</option><option>Gastos comunes</option><option>Seguro</option><option>Mantencion</option><option>Reparacion</option><option>Gastos operacionales</option><option>Otro</option></select></label>
       <label>Proveedor <input name="vendor" /></label>
       <label>Detalle <input name="detail" /></label>
-      <label>Monto CLP <input name="amount" type="number" min="0" step="1" required /></label>
+      <label>Monto CLP <input name="amount" type="number" min="0" step="any" inputmode="numeric" required /></label>
       <label>Estado <select name="status"><option>Pagado</option><option>Pendiente</option><option>Atrasado</option></select></label>
       <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button value="default">Guardar</button></div>
     </form>
   </dialog>
 
-  <script src="app.js" type="module"></script>
+  <script src="app.js?v=20260806-2" type="module"></script>
 </body>
 </html>
