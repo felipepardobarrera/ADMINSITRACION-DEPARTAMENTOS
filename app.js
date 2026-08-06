@@ -1,8 +1,11 @@
 ﻿const DATA_URL = './data/properties.json';
 const STORAGE_KEY = 'administracion-departamentos-v1';
+const MONTH_FILTER_KEY = 'administracion-departamentos-mes';
 const fmtMoney = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
 const fmtDate = new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium' });
+const fmtMonth = new Intl.DateTimeFormat('es-CL', { month: 'short', year: 'numeric' });
 let state;
+let toastTimer;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -14,7 +17,7 @@ async function boot() {
     state = await fetch(DATA_URL).then((r) => r.json());
     persist();
   }
-  $('#monthFilter').value = currentMonth();
+  $('#monthFilter').value = localStorage.getItem(MONTH_FILTER_KEY) || latestActivityMonth() || currentMonth();
   bindEvents();
   renderAll();
 }
@@ -22,6 +25,10 @@ async function boot() {
 function currentMonth() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function latestActivityMonth() {
+  return [...state.income, ...state.expenses].map((row) => monthKey(row.date)).filter(Boolean).sort().at(-1) || '';
 }
 
 function persist() {
@@ -86,11 +93,48 @@ function sum(rows, field = 'amount') {
   return rows.reduce((total, row) => total + Number(row[field] || 0), 0);
 }
 
+function formatMonth(month) {
+  if (!month) return '';
+  const [year, monthNumber] = month.split('-').map(Number);
+  const label = fmtMonth.format(new Date(year, monthNumber - 1, 1)).replace('.', '');
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function paid(rows) {
+  return rows.filter((row) => row.status === 'Pagado');
+}
+
+function cashFlowByMonth() {
+  const months = new Map();
+  const ensureMonth = (key) => {
+    if (!months.has(key)) months.set(key, { month: key, income: 0, expenses: 0, net: 0, accumulated: 0 });
+    return months.get(key);
+  };
+
+  paid(state.income).forEach((row) => {
+    const key = monthKey(row.date);
+    if (key) ensureMonth(key).income += Number(row.amount || 0);
+  });
+  paid(state.expenses).forEach((row) => {
+    const key = monthKey(row.date);
+    if (key) ensureMonth(key).expenses += Number(row.amount || 0);
+  });
+
+  let accumulated = 0;
+  return [...months.values()].sort((a, b) => a.month.localeCompare(b.month)).map((row) => {
+    row.net = row.income - row.expenses;
+    accumulated += row.net;
+    row.accumulated = accumulated;
+    return row;
+  });
+}
+
 function renderAll() {
   fillPropertyOptions();
   renderKpis();
   renderAlerts();
   renderPropertyResults();
+  renderCashFlow();
   renderProperties();
   renderMortgages();
   renderIncome();
@@ -99,12 +143,47 @@ function renderAll() {
 }
 
 function renderKpis() {
-  const income = sum(byMonth(state.income).filter((row) => row.status === 'Pagado'));
-  const expenses = sum(byMonth(state.expenses).filter((row) => row.status === 'Pagado'));
+  const income = sum(paid(byMonth(state.income)));
+  const expenses = sum(paid(byMonth(state.expenses)));
   $('#kpiIncome').textContent = fmtMoney.format(income);
   $('#kpiExpenses').textContent = fmtMoney.format(expenses);
   $('#kpiNet').textContent = fmtMoney.format(income - expenses);
+  $('#kpiNet').className = income - expenses < 0 ? 'negative' : income - expenses > 0 ? 'positive' : '';
   $('#kpiAlerts').textContent = upcomingMortgages(15).length;
+}
+
+function renderCashFlow() {
+  const rows = cashFlowByMonth();
+  const totalIncome = rows.reduce((total, row) => total + row.income, 0);
+  const totalExpenses = rows.reduce((total, row) => total + row.expenses, 0);
+  const balance = totalIncome - totalExpenses;
+  $('#cashflowIncome').textContent = fmtMoney.format(totalIncome);
+  $('#cashflowExpenses').textContent = fmtMoney.format(totalExpenses);
+  $('#cashflowBalance').textContent = fmtMoney.format(balance);
+  $('#cashflowBalance').className = balance < 0 ? 'negative' : balance > 0 ? 'positive' : '';
+  $('#cashflowMonths').textContent = rows.length;
+  $('#cashflowPeriod').textContent = rows.length ? `${formatMonth(rows[0].month)} a ${formatMonth(rows.at(-1).month)} · Solo movimientos pagados` : 'Aun no hay movimientos pagados';
+
+  const tableRows = [...rows].reverse();
+  $('#cashflowRows').innerHTML = tableRows.length ? tableRows.map((row) => `
+    <tr>
+      <td>${formatMonth(row.month)}</td>
+      <td class="numeric income-value">${fmtMoney.format(row.income)}</td>
+      <td class="numeric expense-value">${fmtMoney.format(row.expenses)}</td>
+      <td class="numeric ${row.net < 0 ? 'negative' : row.net > 0 ? 'positive' : ''}">${fmtMoney.format(row.net)}</td>
+      <td class="numeric ${row.accumulated < 0 ? 'negative' : row.accumulated > 0 ? 'positive' : ''}">${fmtMoney.format(row.accumulated)}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="empty-state">Agrega ingresos y gastos pagados para ver el flujo de caja.</td></tr>';
+
+  const chartRows = rows.slice(-12);
+  const maxAmount = Math.max(1, ...chartRows.flatMap((row) => [row.income, row.expenses]));
+  $('#cashflowChart').innerHTML = chartRows.length ? chartRows.map((row) => `
+    <div class="chart-row">
+      <span class="chart-month">${formatMonth(row.month)}</span>
+      <div class="bar-group">
+        <div class="bar-track" title="Ingresos ${fmtMoney.format(row.income)}"><span class="bar income-bar" style="width:${(row.income / maxAmount) * 100}%"></span><strong>${fmtMoney.format(row.income)}</strong></div>
+        <div class="bar-track" title="Egresos ${fmtMoney.format(row.expenses)}"><span class="bar expense-bar" style="width:${(row.expenses / maxAmount) * 100}%"></span><strong>${fmtMoney.format(row.expenses)}</strong></div>
+      </div>
+    </div>`).join('') : '<div class="empty-state">Sin movimientos para graficar.</div>';
 }
 
 function renderAlerts() {
@@ -194,7 +273,10 @@ function bindEvents() {
     $$('.tabs button').forEach((item) => item.classList.toggle('active', item === button));
     $$('.tab-panel').forEach((panel) => panel.classList.toggle('active', panel.id === button.dataset.tab));
   });
-  $('#monthFilter').addEventListener('change', renderAll);
+  $('#monthFilter').addEventListener('change', () => {
+    localStorage.setItem(MONTH_FILTER_KEY, selectedMonth());
+    renderAll();
+  });
   $$('[data-open]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.open}`).showModal()));
   $$('[data-close]').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
   $('#incomeForm').addEventListener('submit', addIncome);
@@ -204,6 +286,7 @@ function bindEvents() {
   $('#exportBackup').addEventListener('click', exportBackup);
   $('#importBackup').addEventListener('change', importBackup);
   $('#downloadMonthly').addEventListener('click', () => downloadCsv('resultado-mensual.csv', monthlyRows()));
+  $('#downloadCashflow').addEventListener('click', () => downloadCsv('flujo-de-caja.csv', cashFlowRows()));
   $('#downloadCalendar').addEventListener('click', () => downloadCsv('vencimientos.csv', alertRows()));
   $('#downloadAll').addEventListener('click', () => downloadCsv('administracion-completa.csv', allRows()));
   document.addEventListener('click', (event) => {
@@ -217,15 +300,33 @@ function bindEvents() {
 function addIncome(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  state.income.push({ id: crypto.randomUUID(), date: form.get('date'), propertyId: form.get('propertyId'), tenant: form.get('tenant'), amount: Number(form.get('amount')), status: form.get('status'), notes: form.get('notes') });
+  const date = form.get('date');
+  const amount = Number(form.get('amount'));
+  state.income.push({ id: crypto.randomUUID(), date, propertyId: form.get('propertyId'), tenant: form.get('tenant'), amount, status: form.get('status'), notes: form.get('notes') });
+  $('#monthFilter').value = monthKey(date);
+  localStorage.setItem(MONTH_FILTER_KEY, monthKey(date));
   persist(); event.currentTarget.reset(); $('#incomeDialog').close(); renderAll();
+  showToast(`Ingreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
 }
 
 function addExpense(event) {
   event.preventDefault();
   const form = new FormData(event.currentTarget);
-  state.expenses.push({ id: crypto.randomUUID(), date: form.get('date'), propertyId: form.get('propertyId'), category: form.get('category'), vendor: form.get('vendor'), detail: form.get('detail'), amount: Number(form.get('amount')), status: form.get('status') });
+  const date = form.get('date');
+  const amount = Number(form.get('amount'));
+  state.expenses.push({ id: crypto.randomUUID(), date, propertyId: form.get('propertyId'), category: form.get('category'), vendor: form.get('vendor'), detail: form.get('detail'), amount, status: form.get('status') });
+  $('#monthFilter').value = monthKey(date);
+  localStorage.setItem(MONTH_FILTER_KEY, monthKey(date));
   persist(); event.currentTarget.reset(); $('#expenseDialog').close(); renderAll();
+  showToast(`Egreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
+}
+
+function showToast(message) {
+  const toast = $('#toast');
+  clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.classList.add('visible');
+  toastTimer = setTimeout(() => toast.classList.remove('visible'), 4200);
 }
 
 function saveProperties() {
@@ -261,6 +362,10 @@ function monthlyRows() {
     const expenses = sum(byMonth(state.expenses).filter((row) => row.propertyId === property.id && row.status === 'Pagado'));
     return [propertyName(property.id), income, expenses, income - expenses];
   })];
+}
+
+function cashFlowRows() {
+  return [['Mes','Ingresos','Egresos','Flujo mensual','Saldo acumulado'], ...cashFlowByMonth().map((row) => [formatMonth(row.month), row.income, row.expenses, row.net, row.accumulated])];
 }
 
 function alertRows() {

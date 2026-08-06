@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Administracion de Departamentos</title>
   <meta name="description" content="Control de propiedades, arriendos, dividendos y gastos operacionales." />
-  <link rel="stylesheet" href="styles.css?v=20260806-2" />
+  <link rel="stylesheet" href="styles.css?v=20260806-4" />
 </head>
 <body>
   <header class="topbar">
@@ -22,9 +22,9 @@
 
   <main>
     <section class="summary-grid" aria-label="Resumen financiero">
-      <article><span>Ingresos mes</span><strong id="kpiIncome">$0</strong></article>
-      <article><span>Gastos mes</span><strong id="kpiExpenses">$0</strong></article>
-      <article><span>Resultado mes</span><strong id="kpiNet">$0</strong></article>
+      <article><span>Ingresos del mes</span><strong id="kpiIncome">$0</strong></article>
+      <article><span>Egresos del mes</span><strong id="kpiExpenses">$0</strong></article>
+      <article><span>Flujo del mes</span><strong id="kpiNet">$0</strong></article>
       <article><span>Alertas 15 dias</span><strong id="kpiAlerts">0</strong></article>
     </section>
 
@@ -39,6 +39,31 @@
       </nav>
 
       <section id="dashboard" class="tab-panel active">
+        <section class="cashflow-section" aria-labelledby="cashflowTitle">
+          <div class="section-head">
+            <div><h2 id="cashflowTitle">Flujo de caja</h2><p id="cashflowPeriod" class="section-note">Movimientos pagados</p></div>
+            <button id="downloadCashflow" class="secondary" type="button">Descargar flujo</button>
+          </div>
+          <div class="cashflow-kpis">
+            <article><span>Ingresos acumulados</span><strong id="cashflowIncome">$0</strong></article>
+            <article><span>Egresos acumulados</span><strong id="cashflowExpenses">$0</strong></article>
+            <article><span>Saldo acumulado</span><strong id="cashflowBalance">$0</strong></article>
+            <article><span>Meses con movimientos</span><strong id="cashflowMonths">0</strong></article>
+          </div>
+          <div class="cashflow-layout">
+            <section class="chart-panel" aria-labelledby="cashflowChartTitle">
+              <div class="chart-heading">
+                <h3 id="cashflowChartTitle">Ingresos y egresos por mes</h3>
+                <div class="chart-legend"><span class="legend-income">Ingresos</span><span class="legend-expense">Egresos</span></div>
+              </div>
+              <div id="cashflowChart" class="cashflow-chart"></div>
+            </section>
+            <section class="cashflow-table-panel" aria-labelledby="cashflowTableTitle">
+              <h3 id="cashflowTableTitle">Detalle mensual</h3>
+              <div class="table-wrap"><table><thead><tr><th>Mes</th><th class="numeric">Ingresos</th><th class="numeric">Egresos</th><th class="numeric">Flujo</th><th class="numeric">Acumulado</th></tr></thead><tbody id="cashflowRows"></tbody></table></div>
+            </section>
+          </div>
+        </section>
         <div class="split">
           <section>
             <div class="section-head"><h2>Proximos vencimientos</h2><button id="downloadCalendar" type="button">CSV</button></div>
@@ -114,6 +139,7 @@
     </form>
   </dialog>
 
-  <script src="app.js?v=20260806-2" type="module"></script>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="app.js?v=20260806-4" type="module"></script>
 </body>
 </html>
