@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Administracion de Departamentos</title>
   <meta name="description" content="Control de propiedades, arriendos, dividendos y gastos operacionales." />
-  <link rel="stylesheet" href="styles.css?v=20260806-5" />
+  <link rel="stylesheet" href="styles.css?v=20260806-7" />
 </head>
 <body>
   <header class="topbar">
@@ -98,12 +98,12 @@
 
       <section id="income" class="tab-panel">
         <div class="section-head"><h2>Ingresos por arriendo</h2><button data-open="incomeDialog" type="button">Agregar ingreso</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Propiedad</th><th>Arrendatario</th><th>Monto</th><th>Estado</th><th>Nota</th><th></th></tr></thead><tbody id="incomeRows"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Propiedad</th><th>Arrendatario</th><th>Monto</th><th>Estado</th><th>Nota</th><th>Respaldo</th><th></th></tr></thead><tbody id="incomeRows"></tbody></table></div>
       </section>
 
       <section id="expenses" class="tab-panel">
         <div class="section-head"><h2>Gastos operacionales</h2><button data-open="expenseDialog" type="button">Agregar gasto</button></div>
-        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Propiedad</th><th>Categoria</th><th>Detalle</th><th>Monto</th><th>Estado</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div>
+        <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Propiedad</th><th>Categoria</th><th>Detalle</th><th>Monto</th><th>Estado</th><th>Respaldo</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div>
       </section>
 
       <section id="mortgages" class="tab-panel">
@@ -136,6 +136,7 @@
       <label>Monto CLP <input name="amount" type="number" min="0" step="any" inputmode="numeric" required /></label>
       <label>Estado <select name="status"><option>Pagado</option><option>Pendiente</option><option>Atrasado</option></select></label>
       <label>Observacion <textarea name="notes"></textarea></label>
+      <label class="file-field">Archivo de respaldo <input name="evidence" type="file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" /><small>PDF, imagen o archivo Office. Maximo 20 MB. Queda guardado en este navegador.</small></label>
       <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button value="default">Guardar</button></div>
     </form>
   </dialog>
@@ -150,11 +151,12 @@
       <label>Detalle <input name="detail" /></label>
       <label>Monto CLP <input name="amount" type="number" min="0" step="any" inputmode="numeric" required /></label>
       <label>Estado <select name="status"><option>Pagado</option><option>Pendiente</option><option>Atrasado</option></select></label>
+      <label class="file-field">Archivo de respaldo <input name="evidence" type="file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" /><small>PDF, imagen o archivo Office. Maximo 20 MB. Queda guardado en este navegador.</small></label>
       <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button value="default">Guardar</button></div>
     </form>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=20260806-5" type="module"></script>
+  <script src="app.js?v=20260806-7" type="module"></script>
 </body>
 </html>

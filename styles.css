@@ -17,6 +17,7 @@ button, .ghost-file { border: 1px solid var(--blue); background: var(--blue); co
 button:hover, .ghost-file:hover { filter: brightness(1.05); }
 button.secondary { background: #fff; color: var(--blue); }
 button.danger { background: #fff; color: var(--red); border-color: #f3b3ad; }
+button.small { min-height: 30px; padding: 5px 8px; font-size: 12px; }
 .topbar { background: linear-gradient(90deg, #16324f, #0f766e); color: #fff; padding: 24px clamp(16px, 4vw, 48px); display: flex; align-items: end; justify-content: space-between; gap: 20px; }
 .eyebrow { margin: 0 0 4px; text-transform: uppercase; letter-spacing: 0; font-size: 12px; opacity: .84; }
 h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.1; }
@@ -109,6 +110,13 @@ td.numeric, th.numeric { text-align: right; }
 label { color: var(--muted); font-size: 13px; }
 input, select, textarea { width: 100%; margin-top: 5px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: #fff; }
 textarea { min-height: 72px; resize: vertical; }
+.file-field { padding: 11px; border: 1px dashed #9aabbf; border-radius: 6px; background: var(--soft); }
+.file-field input { padding: 7px; background: #fff; }
+.file-field small { display: block; margin-top: 6px; color: var(--muted); }
+.attachment-actions { display: grid; gap: 6px; min-width: 170px; max-width: 250px; }
+.attachment-actions > span { overflow: hidden; color: var(--blue); font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-actions > div { display: flex; gap: 5px; }
+.no-attachment { color: var(--muted); font-size: 12px; white-space: nowrap; }
 dialog { border: 0; border-radius: 8px; width: min(560px, calc(100vw - 30px)); padding: 0; box-shadow: 0 24px 70px rgba(15, 23, 42, .25); }
 dialog::backdrop { background: rgba(15, 23, 42, .45); }
 .entry-form { padding: 20px; display: grid; gap: 12px; }

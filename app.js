@@ -1,6 +1,9 @@
 ﻿const DATA_URL = './data/properties.json';
 const STORAGE_KEY = 'administracion-departamentos-v1';
 const MONTH_FILTER_KEY = 'administracion-departamentos-mes';
+const ATTACHMENT_DB_NAME = 'administracion-departamentos-archivos';
+const ATTACHMENT_STORE = 'respaldos';
+const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
 const fmtMoney = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
 const fmtDate = new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium' });
 const fmtMonth = new Intl.DateTimeFormat('es-CL', { month: 'short', year: 'numeric' });
@@ -33,6 +36,50 @@ function latestActivityMonth() {
 
 function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function attachmentDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(ATTACHMENT_DB_NAME, 1);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(ATTACHMENT_STORE)) request.result.createObjectStore(ATTACHMENT_STORE);
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveAttachment(id, file) {
+  const db = await attachmentDb();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(ATTACHMENT_STORE, 'readwrite');
+    transaction.objectStore(ATTACHMENT_STORE).put(file, id);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
+}
+
+async function getAttachment(id) {
+  const db = await attachmentDb();
+  const file = await new Promise((resolve, reject) => {
+    const request = db.transaction(ATTACHMENT_STORE, 'readonly').objectStore(ATTACHMENT_STORE).get(id);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  db.close();
+  return file;
+}
+
+async function deleteAttachment(id) {
+  const db = await attachmentDb();
+  await new Promise((resolve, reject) => {
+    const transaction = db.transaction(ATTACHMENT_STORE, 'readwrite');
+    transaction.objectStore(ATTACHMENT_STORE).delete(id);
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error);
+  });
+  db.close();
 }
 
 function propertyName(id) {
@@ -295,11 +342,16 @@ function renderMortgages() {
 }
 
 function renderIncome() {
-  $('#incomeRows').innerHTML = [...state.income].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.tenant || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${escapeHtml(row.notes || '')}</td><td><button class="danger" data-delete-income="${row.id}" type="button">Eliminar</button></td></tr>`).join('');
+  $('#incomeRows').innerHTML = [...state.income].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.tenant || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${escapeHtml(row.notes || '')}</td><td>${attachmentCell(row)}</td><td><button class="danger" data-delete-income="${row.id}" type="button">Eliminar</button></td></tr>`).join('');
 }
 
 function renderExpenses() {
-  $('#expenseRows').innerHTML = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.category || '')}</td><td>${escapeHtml(row.detail || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td><button class="danger" data-delete-expense="${row.id}" type="button">Eliminar</button></td></tr>`).join('');
+  $('#expenseRows').innerHTML = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.category || '')}</td><td>${escapeHtml(row.detail || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${attachmentCell(row)}</td><td><button class="danger" data-delete-expense="${row.id}" type="button">Eliminar</button></td></tr>`).join('');
+}
+
+function attachmentCell(row) {
+  if (!row.attachment) return '<span class="no-attachment">Sin archivo</span>';
+  return `<div class="attachment-actions"><span title="${escapeAttr(row.attachment.name)}">${escapeHtml(row.attachment.name)}</span><div><button class="small secondary" data-open-attachment="${row.id}" type="button">Abrir</button><button class="small secondary" data-download-attachment="${row.id}" type="button">Descargar</button></div></div>`;
 }
 
 function renderReports() {
@@ -338,36 +390,96 @@ function bindEvents() {
   $('#downloadCashflow').addEventListener('click', () => downloadCsv('flujo-de-caja.csv', cashFlowRows()));
   $('#downloadCalendar').addEventListener('click', () => downloadCsv('vencimientos.csv', alertRows()));
   $('#downloadAll').addEventListener('click', () => downloadCsv('administracion-completa.csv', allRows()));
-  document.addEventListener('click', (event) => {
-    const incomeId = event.target.dataset.deleteIncome;
-    const expenseId = event.target.dataset.deleteExpense;
-    if (incomeId) { state.income = state.income.filter((row) => row.id !== incomeId); persist(); renderAll(); }
-    if (expenseId) { state.expenses = state.expenses.filter((row) => row.id !== expenseId); persist(); renderAll(); }
+  document.addEventListener('click', async (event) => {
+    const openButton = event.target.closest('[data-open-attachment]');
+    const downloadButton = event.target.closest('[data-download-attachment]');
+    const incomeButton = event.target.closest('[data-delete-income]');
+    const expenseButton = event.target.closest('[data-delete-expense]');
+    if (openButton) await openAttachment(openButton.dataset.openAttachment, false);
+    if (downloadButton) await openAttachment(downloadButton.dataset.downloadAttachment, true);
+    if (incomeButton) {
+      const id = incomeButton.dataset.deleteIncome;
+      state.income = state.income.filter((row) => row.id !== id);
+      await deleteAttachment(id).catch(() => {});
+      persist(); renderAll();
+    }
+    if (expenseButton) {
+      const id = expenseButton.dataset.deleteExpense;
+      state.expenses = state.expenses.filter((row) => row.id !== id);
+      await deleteAttachment(id).catch(() => {});
+      persist(); renderAll();
+    }
   });
 }
 
-function addIncome(event) {
+async function addIncome(event) {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
   const date = form.get('date');
   const amount = Number(form.get('amount'));
-  state.income.push({ id: crypto.randomUUID(), date, propertyId: form.get('propertyId'), tenant: form.get('tenant'), amount, status: form.get('status'), notes: form.get('notes') });
+  const id = crypto.randomUUID();
+  let attachment;
+  try {
+    attachment = await attachmentFromForm(form, id);
+  } catch (error) {
+    showToast(error.message || 'No fue posible guardar el archivo de respaldo.');
+    return;
+  }
+  state.income.push({ id, date, propertyId: form.get('propertyId'), tenant: form.get('tenant'), amount, status: form.get('status'), notes: form.get('notes'), attachment });
   $('#monthFilter').value = monthKey(date);
   localStorage.setItem(MONTH_FILTER_KEY, monthKey(date));
-  persist(); event.currentTarget.reset(); $('#incomeDialog').close(); renderAll();
+  persist(); formElement.reset(); $('#incomeDialog').close(); renderAll();
   showToast(`Ingreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
 }
 
-function addExpense(event) {
+async function addExpense(event) {
   event.preventDefault();
-  const form = new FormData(event.currentTarget);
+  const formElement = event.currentTarget;
+  const form = new FormData(formElement);
   const date = form.get('date');
   const amount = Number(form.get('amount'));
-  state.expenses.push({ id: crypto.randomUUID(), date, propertyId: form.get('propertyId'), category: form.get('category'), vendor: form.get('vendor'), detail: form.get('detail'), amount, status: form.get('status') });
+  const id = crypto.randomUUID();
+  let attachment;
+  try {
+    attachment = await attachmentFromForm(form, id);
+  } catch (error) {
+    showToast(error.message || 'No fue posible guardar el archivo de respaldo.');
+    return;
+  }
+  state.expenses.push({ id, date, propertyId: form.get('propertyId'), category: form.get('category'), vendor: form.get('vendor'), detail: form.get('detail'), amount, status: form.get('status'), attachment });
   $('#monthFilter').value = monthKey(date);
   localStorage.setItem(MONTH_FILTER_KEY, monthKey(date));
-  persist(); event.currentTarget.reset(); $('#expenseDialog').close(); renderAll();
+  persist(); formElement.reset(); $('#expenseDialog').close(); renderAll();
   showToast(`Egreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
+}
+
+async function attachmentFromForm(form, id) {
+  const file = form.get('evidence');
+  if (!(file instanceof File) || !file.size) return null;
+  if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('El respaldo supera el maximo permitido de 20 MB.');
+  await saveAttachment(id, file);
+  return { name: file.name, type: file.type, size: file.size };
+}
+
+async function openAttachment(id, download) {
+  try {
+    const file = await getAttachment(id);
+    if (!file) {
+      showToast('El archivo no esta disponible en este navegador.');
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    if (download) link.download = file.name || 'respaldo';
+    else link.target = '_blank';
+    link.rel = 'noopener';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch {
+    showToast('No fue posible abrir el archivo de respaldo.');
+  }
 }
 
 function showToast(message) {
@@ -422,7 +534,7 @@ function alertRows() {
 }
 
 function allRows() {
-  return [['Tipo','Fecha','Propiedad','Categoria/Arrendatario','Detalle','Monto','Estado'], ...state.income.map((row) => ['Ingreso', row.date, propertyName(row.propertyId), row.tenant || '', row.notes || '', row.amount || 0, row.status]), ...state.expenses.map((row) => ['Gasto', row.date, propertyName(row.propertyId), row.category || '', row.detail || '', row.amount || 0, row.status])];
+  return [['Tipo','Fecha','Propiedad','Categoria/Arrendatario','Detalle','Monto','Estado','Respaldo'], ...state.income.map((row) => ['Ingreso', row.date, propertyName(row.propertyId), row.tenant || '', row.notes || '', row.amount || 0, row.status, row.attachment?.name || '']), ...state.expenses.map((row) => ['Gasto', row.date, propertyName(row.propertyId), row.category || '', row.detail || '', row.amount || 0, row.status, row.attachment?.name || ''])];
 }
 
 function downloadCsv(filename, rows) {
