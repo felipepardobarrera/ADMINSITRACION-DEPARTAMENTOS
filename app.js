@@ -104,18 +104,18 @@ function paid(rows) {
   return rows.filter((row) => row.status === 'Pagado');
 }
 
-function cashFlowByMonth() {
+function cashFlowByMonth(propertyId = null) {
   const months = new Map();
   const ensureMonth = (key) => {
     if (!months.has(key)) months.set(key, { month: key, income: 0, expenses: 0, net: 0, accumulated: 0 });
     return months.get(key);
   };
 
-  paid(state.income).forEach((row) => {
+  paid(state.income).filter((row) => !propertyId || row.propertyId === propertyId).forEach((row) => {
     const key = monthKey(row.date);
     if (key) ensureMonth(key).income += Number(row.amount || 0);
   });
-  paid(state.expenses).forEach((row) => {
+  paid(state.expenses).filter((row) => !propertyId || row.propertyId === propertyId).forEach((row) => {
     const key = monthKey(row.date);
     if (key) ensureMonth(key).expenses += Number(row.amount || 0);
   });
@@ -135,6 +135,7 @@ function renderAll() {
   renderAlerts();
   renderPropertyResults();
   renderCashFlow();
+  renderDepartmentDashboard();
   renderProperties();
   renderMortgages();
   renderIncome();
@@ -184,6 +185,54 @@ function renderCashFlow() {
         <div class="bar-track" title="Egresos ${fmtMoney.format(row.expenses)}"><span class="bar expense-bar" style="width:${(row.expenses / maxAmount) * 100}%"></span><strong>${fmtMoney.format(row.expenses)}</strong></div>
       </div>
     </div>`).join('') : '<div class="empty-state">Sin movimientos para graficar.</div>';
+}
+
+function renderDepartmentDashboard() {
+  const monthIncome = sum(paid(byMonth(state.income)));
+  const monthExpenses = sum(paid(byMonth(state.expenses)));
+  const portfolioRows = cashFlowByMonth();
+  const totalBalance = portfolioRows.at(-1)?.accumulated || 0;
+  $('#departmentPeriod').textContent = `${formatMonth(selectedMonth())} · Solo movimientos pagados`;
+  $('#portfolioMonthIncome').textContent = fmtMoney.format(monthIncome);
+  $('#portfolioMonthExpenses').textContent = fmtMoney.format(monthExpenses);
+  $('#portfolioMonthBalance').textContent = fmtMoney.format(monthIncome - monthExpenses);
+  $('#portfolioMonthBalance').className = financialClass(monthIncome - monthExpenses);
+  $('#portfolioTotalBalance').textContent = fmtMoney.format(totalBalance);
+  $('#portfolioTotalBalance').className = financialClass(totalBalance);
+
+  $('#departmentPanels').innerHTML = state.properties.map((property) => {
+    const incomeMonth = sum(paid(byMonth(state.income)).filter((row) => row.propertyId === property.id));
+    const expensesMonth = sum(paid(byMonth(state.expenses)).filter((row) => row.propertyId === property.id));
+    const history = cashFlowByMonth(property.id);
+    const totalIncome = history.reduce((total, row) => total + row.income, 0);
+    const totalExpenses = history.reduce((total, row) => total + row.expenses, 0);
+    const totalNet = totalIncome - totalExpenses;
+    const historyRows = [...history].reverse().slice(0, 6);
+    return `<article class="department-panel">
+      <div class="department-panel-head">
+        <div><span class="unit-label">Departamento ${escapeHtml(property.unit)}</span><h3>${escapeHtml(property.address)}</h3></div>
+        <span class="badge">${escapeHtml(property.status)}</span>
+      </div>
+      <div class="department-metrics">
+        <div><span>Ingreso mes</span><strong>${fmtMoney.format(incomeMonth)}</strong></div>
+        <div><span>Egreso mes</span><strong>${fmtMoney.format(expensesMonth)}</strong></div>
+        <div><span>Saldo mes</span><strong class="${financialClass(incomeMonth - expensesMonth)}">${fmtMoney.format(incomeMonth - expensesMonth)}</strong></div>
+        <div><span>Ingreso acumulado</span><strong>${fmtMoney.format(totalIncome)}</strong></div>
+        <div><span>Egreso acumulado</span><strong>${fmtMoney.format(totalExpenses)}</strong></div>
+        <div><span>Saldo acumulado</span><strong class="${financialClass(totalNet)}">${fmtMoney.format(totalNet)}</strong></div>
+      </div>
+      <div class="department-history">
+        <h4>Últimos movimientos mensuales</h4>
+        <div class="table-wrap"><table><thead><tr><th>Mes</th><th class="numeric">Ingreso</th><th class="numeric">Egreso</th><th class="numeric">Saldo</th></tr></thead><tbody>
+          ${historyRows.length ? historyRows.map((row) => `<tr><td>${formatMonth(row.month)}</td><td class="numeric income-value">${fmtMoney.format(row.income)}</td><td class="numeric expense-value">${fmtMoney.format(row.expenses)}</td><td class="numeric ${financialClass(row.net)}">${fmtMoney.format(row.net)}</td></tr>`).join('') : '<tr><td colspan="4" class="empty-state">Sin movimientos pagados.</td></tr>'}
+        </tbody></table></div>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+function financialClass(value) {
+  return value < 0 ? 'negative' : value > 0 ? 'positive' : '';
 }
 
 function renderAlerts() {

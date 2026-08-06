@@ -50,6 +50,24 @@ main { padding: 22px clamp(14px, 3vw, 42px) 42px; }
 .cashflow-kpis article:nth-child(4) { border-top-color: var(--amber); }
 .cashflow-kpis span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 7px; }
 .cashflow-kpis strong { display: block; font-size: 21px; overflow-wrap: anywhere; }
+.portfolio-summary { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px; margin: 4px 0 26px; }
+.portfolio-summary article { min-width: 0; padding: 16px; border: 1px solid var(--line); border-left: 5px solid var(--blue); border-radius: 6px; background: var(--soft); }
+.portfolio-summary article:nth-child(2) { border-left-color: var(--red); }
+.portfolio-summary article:nth-child(3) { border-left-color: var(--teal); }
+.portfolio-summary article:nth-child(4) { border-left-color: var(--amber); }
+.portfolio-summary span { display: block; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+.portfolio-summary strong { display: block; font-size: 22px; overflow-wrap: anywhere; }
+.department-heading { margin-top: 4px; }
+.department-panels { display: grid; grid-template-columns: repeat(2, minmax(420px, 1fr)); gap: 16px; align-items: start; }
+.department-panel { min-width: 0; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.department-panel-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 13px; border-bottom: 1px solid var(--line); }
+.department-panel-head h3 { margin: 3px 0 0; font-size: 17px; }
+.unit-label { color: var(--teal); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.department-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 14px 0; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--line); }
+.department-metrics div { min-width: 0; padding: 11px; background: var(--soft); }
+.department-metrics span { display: block; margin-bottom: 6px; color: var(--muted); font-size: 11px; }
+.department-metrics strong { display: block; font-size: 16px; overflow-wrap: anywhere; }
+.department-history h4 { margin: 0 0 9px; font-size: 14px; }
 .cashflow-layout { display: grid; grid-template-columns: minmax(330px, .9fr) minmax(520px, 1.35fr); gap: 18px; align-items: start; }
 .chart-panel, .cashflow-table-panel { min-width: 0; }
 .chart-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
@@ -103,11 +121,13 @@ dialog::backdrop { background: rgba(15, 23, 42, .45); }
 @media (max-width: 860px) {
   .topbar { align-items: stretch; flex-direction: column; }
   .top-actions { justify-content: flex-start; }
-  .summary-grid, .report-grid, .split, .property-grid, .cashflow-layout { grid-template-columns: 1fr; }
+  .summary-grid, .report-grid, .split, .property-grid, .cashflow-layout, .department-panels { grid-template-columns: 1fr; }
   .cashflow-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .portfolio-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 520px) {
-  .cashflow-kpis { grid-template-columns: 1fr; }
+  .cashflow-kpis, .portfolio-summary { grid-template-columns: 1fr; }
+  .department-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .chart-heading { align-items: flex-start; flex-direction: column; }
   .chart-row { grid-template-columns: 66px minmax(150px, 1fr); }
   .tab-panel { padding: 14px; }
