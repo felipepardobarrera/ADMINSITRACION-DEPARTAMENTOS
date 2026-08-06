@@ -35,6 +35,18 @@ Para probarlo manualmente, entra en GitHub a `Actions > Alertas hipotecarias > R
 
 GitHub Pages publica automaticamente el sitio desde la rama `main`. No se necesita un segundo flujo de publicacion.
 
+## Publicacion en GitLab Pages
+
+El archivo `.gitlab-ci.yml` comprueba el sistema y publica el sitio automaticamente desde la rama principal.
+
+Para activar las alertas en GitLab:
+
+1. Agrega `SMTP_PASS` en `Settings > CI/CD > Variables` como variable enmascarada.
+2. Crea una programacion diaria en `Build > Pipeline schedules` para la rama principal.
+3. Usa la zona horaria `America/Santiago` y un horario como `15 9 * * *`.
+
+GitHub puede mantenerse como respaldo del mismo repositorio.
+
 ## Uso diario
 
 Abre `index.html`, registra pagos de arriendo y gastos, y usa `Exportar respaldo` cuando quieras guardar una copia de tus cambios.

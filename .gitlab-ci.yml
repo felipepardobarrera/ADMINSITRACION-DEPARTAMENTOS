@@ -1,0 +1,45 @@
+stages:
+  - test
+  - deploy
+  - alerts
+
+variables:
+  NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.npm"
+
+cache:
+  key: "$CI_COMMIT_REF_SLUG"
+  paths:
+    - .npm/
+
+validate:
+  stage: test
+  image: node:24-alpine
+  script:
+    - npm install --omit=dev
+    - npm run check
+  rules:
+    - if: '$CI_PIPELINE_SOURCE != "schedule"'
+
+create-pages:
+  stage: deploy
+  image: alpine:3.22
+  script:
+    - mkdir public
+    - cp index.html app.js styles.css public/
+    - cp -r data public/data
+  pages: true
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE != "schedule"'
+
+alertas-hipotecarias:
+  stage: alerts
+  image: node:24-alpine
+  variables:
+    ALERT_DAYS_BEFORE: "3"
+    ALERT_TO: "FPARDO1996@GMAIL.COM"
+  script:
+    - npm install --omit=dev
+    - node scripts/send-reminders.mjs
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
