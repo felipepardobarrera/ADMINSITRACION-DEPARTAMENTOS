@@ -21,13 +21,11 @@ Sistema personal para controlar propiedades, dividendos hipotecarios, ingresos p
 
 El flujo `.github/workflows/alertas-hipotecarias.yml` revisa diariamente los dividendos que vencen en 3 dias y envia correo a `FPARDO1996@GMAIL.COM`.
 
-Para activar el envio real, agrega estos secretos en GitHub: `Settings > Secrets and variables > Actions > New repository secret`.
+Para activar el envio real, agrega este secreto en GitHub: `Settings > Secrets and variables > Actions > New repository secret`.
 
-- `SMTP_HOST`: servidor SMTP. Para Gmail: `smtp.gmail.com`.
-- `SMTP_PORT`: para Gmail usa `465`.
-- `SMTP_USER`: correo que enviara la alerta.
-- `SMTP_PASS`: clave de aplicacion del correo emisor.
-- `ALERT_TO`: correo receptor. Si no se define, usa el correo configurado en `data/properties.json`.
+- `SMTP_PASS`: clave de aplicacion de Gmail para `FPARDO1996@GMAIL.COM`.
+
+El servidor `smtp.gmail.com`, el puerto `465`, el usuario y el destinatario ya estan configurados. `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_FROM` y `ALERT_TO` quedan disponibles solo como ajustes opcionales.
 
 En Gmail debes crear una clave de aplicacion, no usar tu clave normal.
 
@@ -35,7 +33,7 @@ Para probarlo manualmente, entra en GitHub a `Actions > Alertas hipotecarias > R
 
 ## Publicacion en GitHub Pages
 
-El flujo `.github/workflows/pages.yml` publica el sistema como sitio estatico cuando hay cambios en la rama `main`.
+GitHub Pages publica automaticamente el sitio desde la rama `main`. No se necesita un segundo flujo de publicacion.
 
 ## Uso diario
 

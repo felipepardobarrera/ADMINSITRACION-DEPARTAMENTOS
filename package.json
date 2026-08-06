@@ -9,7 +9,7 @@
     "check": "node --check app.js && node --check scripts/send-reminders.mjs"
   },
   "dependencies": {
-    "nodemailer": "^6.9.16"
+    "nodemailer": "^9.0.3"
   },
   "devDependencies": {
     "serve": "^14.2.4"

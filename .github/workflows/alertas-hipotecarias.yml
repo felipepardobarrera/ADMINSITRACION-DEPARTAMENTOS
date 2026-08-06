@@ -14,26 +14,31 @@ on:
           - 'false'
           - 'true'
 
+concurrency:
+  group: alertas-hipotecarias
+  cancel-in-progress: true
+
 jobs:
   alertas:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Descargar repositorio
         uses: actions/checkout@v4
       - name: Preparar Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
       - name: Instalar dependencias
         run: npm install --omit=dev
       - name: Revisar vencimientos y enviar correo
         run: node scripts/send-reminders.mjs
         env:
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST || 'smtp.gmail.com' }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT || '465' }}
+          SMTP_USER: ${{ secrets.SMTP_USER || 'FPARDO1996@GMAIL.COM' }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
-          ALERT_TO: ${{ secrets.ALERT_TO }}
+          ALERT_TO: ${{ secrets.ALERT_TO || 'FPARDO1996@GMAIL.COM' }}
           ALERT_DAYS_BEFORE: 3
           ALERT_SEND_TEST: ${{ inputs.enviar_prueba || 'false' }}

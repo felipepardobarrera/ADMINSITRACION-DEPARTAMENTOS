@@ -6,7 +6,8 @@ const DAYS_BEFORE = Number(process.env.ALERT_DAYS_BEFORE || 3);
 const SEND_TEST = process.env.ALERT_SEND_TEST === 'true';
 const fallbackRecipient = 'FPARDO1996@GMAIL.COM';
 
-const data = JSON.parse(await fs.readFile(DATA_FILE, 'utf8'));
+const rawData = await fs.readFile(DATA_FILE, 'utf8');
+const data = JSON.parse(rawData.replace(/^\uFEFF/, ''));
 const today = todayInChile();
 let alerts = data.mortgages.map((mortgage) => {
   const dueDate = nextDueDate(mortgage, today);
@@ -27,23 +28,23 @@ if (!alerts.length) {
   process.exit(0);
 }
 
-const required = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASS'];
-const missing = required.filter((key) => !process.env[key]);
-if (missing.length) {
-  throw new Error(`Faltan secretos para enviar correo: ${missing.join(', ')}`);
-}
+const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+const smtpPort = Number(process.env.SMTP_PORT || 465);
+const smtpUser = process.env.SMTP_USER || fallbackRecipient;
+const smtpPass = String(process.env.SMTP_PASS || '').replace(/\s/g, '');
+if (!smtpPass) throw new Error('Falta configurar el secreto SMTP_PASS con una contraseña de aplicacion de Gmail.');
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT || 465),
-  secure: Number(process.env.SMTP_PORT || 465) === 465,
-  auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+  host: smtpHost,
+  port: smtpPort,
+  secure: smtpPort === 465,
+  auth: { user: smtpUser, pass: smtpPass }
 });
 
 const to = process.env.ALERT_TO || data.ownerEmail || fallbackRecipient;
 const subject = SEND_TEST ? 'Prueba de alertas hipotecarias' : `Alerta dividendo hipotecario: vence en ${DAYS_BEFORE} dias`;
 const html = buildEmail(alerts);
-await transporter.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, html });
+await transporter.sendMail({ from: process.env.SMTP_FROM || smtpUser, to, subject, html });
 console.log(`Alerta enviada a ${to}.`);
 
 function todayInChile() {
