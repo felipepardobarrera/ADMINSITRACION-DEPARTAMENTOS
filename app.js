@@ -342,11 +342,11 @@ function renderMortgages() {
 }
 
 function renderIncome() {
-  $('#incomeRows').innerHTML = [...state.income].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.tenant || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${escapeHtml(row.notes || '')}</td><td>${attachmentCell(row)}</td><td><button class="danger" data-delete-income="${row.id}" type="button">Eliminar</button></td></tr>`).join('');
+  $('#incomeRows').innerHTML = [...state.income].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.tenant || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${escapeHtml(row.notes || '')}</td><td>${attachmentCell(row)}</td><td><div class="row-actions"><button class="small secondary" data-edit-income="${row.id}" type="button">Editar</button><button class="small danger" data-delete-income="${row.id}" type="button">Eliminar</button></div></td></tr>`).join('');
 }
 
 function renderExpenses() {
-  $('#expenseRows').innerHTML = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.category || '')}</td><td>${escapeHtml(row.detail || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${attachmentCell(row)}</td><td><button class="danger" data-delete-expense="${row.id}" type="button">Eliminar</button></td></tr>`).join('');
+  $('#expenseRows').innerHTML = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.category || '')}</td><td>${escapeHtml(row.detail || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${attachmentCell(row)}</td><td><div class="row-actions"><button class="small secondary" data-edit-expense="${row.id}" type="button">Editar</button><button class="small danger" data-delete-expense="${row.id}" type="button">Eliminar</button></div></td></tr>`).join('');
 }
 
 function attachmentCell(row) {
@@ -378,7 +378,10 @@ function bindEvents() {
     localStorage.setItem(MONTH_FILTER_KEY, selectedMonth());
     renderAll();
   });
-  $$('[data-open]').forEach((button) => button.addEventListener('click', () => $(`#${button.dataset.open}`).showModal()));
+  $$('[data-open]').forEach((button) => button.addEventListener('click', () => {
+    prepareCreateForm(button.dataset.open);
+    $(`#${button.dataset.open}`).showModal();
+  }));
   $$('[data-close]').forEach((button) => button.addEventListener('click', () => button.closest('dialog').close()));
   $('#incomeForm').addEventListener('submit', addIncome);
   $('#expenseForm').addEventListener('submit', addExpense);
@@ -393,10 +396,14 @@ function bindEvents() {
   document.addEventListener('click', async (event) => {
     const openButton = event.target.closest('[data-open-attachment]');
     const downloadButton = event.target.closest('[data-download-attachment]');
+    const editIncomeButton = event.target.closest('[data-edit-income]');
+    const editExpenseButton = event.target.closest('[data-edit-expense]');
     const incomeButton = event.target.closest('[data-delete-income]');
     const expenseButton = event.target.closest('[data-delete-expense]');
     if (openButton) await openAttachment(openButton.dataset.openAttachment, false);
     if (downloadButton) await openAttachment(downloadButton.dataset.downloadAttachment, true);
+    if (editIncomeButton) editIncome(editIncomeButton.dataset.editIncome);
+    if (editExpenseButton) editExpense(editExpenseButton.dataset.editExpense);
     if (incomeButton) {
       const id = incomeButton.dataset.deleteIncome;
       state.income = state.income.filter((row) => row.id !== id);
@@ -412,25 +419,77 @@ function bindEvents() {
   });
 }
 
+function prepareCreateForm(dialogId) {
+  const isIncome = dialogId === 'incomeDialog';
+  const form = $(isIncome ? '#incomeForm' : '#expenseForm');
+  form.reset();
+  form.elements.recordId.value = '';
+  $(isIncome ? '#incomeFormTitle' : '#expenseFormTitle').textContent = isIncome ? 'Nuevo ingreso' : 'Nuevo gasto';
+  $(isIncome ? '#incomeSubmit' : '#expenseSubmit').textContent = 'Guardar';
+  $(isIncome ? '#incomeCurrentAttachment' : '#expenseCurrentAttachment').textContent = '';
+}
+
+function editIncome(id) {
+  const row = state.income.find((item) => item.id === id);
+  if (!row) return;
+  const form = $('#incomeForm');
+  form.reset();
+  form.elements.recordId.value = row.id;
+  form.elements.date.value = row.date || '';
+  form.elements.propertyId.value = row.propertyId || '';
+  form.elements.tenant.value = row.tenant || '';
+  form.elements.amount.value = row.amount || 0;
+  form.elements.status.value = row.status || 'Pagado';
+  form.elements.notes.value = row.notes || '';
+  $('#incomeFormTitle').textContent = 'Editar ingreso';
+  $('#incomeSubmit').textContent = 'Guardar cambios';
+  $('#incomeCurrentAttachment').textContent = row.attachment ? `Respaldo actual: ${row.attachment.name}` : 'Este ingreso no tiene respaldo adjunto.';
+  $('#incomeDialog').showModal();
+}
+
+function editExpense(id) {
+  const row = state.expenses.find((item) => item.id === id);
+  if (!row) return;
+  const form = $('#expenseForm');
+  form.reset();
+  form.elements.recordId.value = row.id;
+  form.elements.date.value = row.date || '';
+  form.elements.propertyId.value = row.propertyId || '';
+  form.elements.category.value = row.category || 'Otro';
+  form.elements.vendor.value = row.vendor || '';
+  form.elements.detail.value = row.detail || '';
+  form.elements.amount.value = row.amount || 0;
+  form.elements.status.value = row.status || 'Pagado';
+  $('#expenseFormTitle').textContent = 'Editar gasto';
+  $('#expenseSubmit').textContent = 'Guardar cambios';
+  $('#expenseCurrentAttachment').textContent = row.attachment ? `Respaldo actual: ${row.attachment.name}` : 'Este gasto no tiene respaldo adjunto.';
+  $('#expenseDialog').showModal();
+}
+
 async function addIncome(event) {
   event.preventDefault();
   const formElement = event.currentTarget;
   const form = new FormData(formElement);
   const date = form.get('date');
   const amount = Number(form.get('amount'));
-  const id = crypto.randomUUID();
+  const recordId = form.get('recordId');
+  const existingIndex = state.income.findIndex((row) => row.id === recordId);
+  const existing = existingIndex >= 0 ? state.income[existingIndex] : null;
+  const id = existing?.id || crypto.randomUUID();
   let attachment;
   try {
-    attachment = await attachmentFromForm(form, id);
+    attachment = await attachmentFromForm(form, id, existing?.attachment || null);
   } catch (error) {
     showToast(error.message || 'No fue posible guardar el archivo de respaldo.');
     return;
   }
-  state.income.push({ id, date, propertyId: form.get('propertyId'), tenant: form.get('tenant'), amount, status: form.get('status'), notes: form.get('notes'), attachment });
+  const income = { id, date, propertyId: form.get('propertyId'), tenant: form.get('tenant'), amount, status: form.get('status'), notes: form.get('notes'), attachment };
+  if (existingIndex >= 0) state.income[existingIndex] = income;
+  else state.income.push(income);
   $('#monthFilter').value = monthKey(date);
   localStorage.setItem(MONTH_FILTER_KEY, monthKey(date));
   persist(); formElement.reset(); $('#incomeDialog').close(); renderAll();
-  showToast(`Ingreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
+  showToast(existing ? `Ingreso actualizado a ${fmtMoney.format(amount)}.` : `Ingreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
 }
 
 async function addExpense(event) {
@@ -439,24 +498,29 @@ async function addExpense(event) {
   const form = new FormData(formElement);
   const date = form.get('date');
   const amount = Number(form.get('amount'));
-  const id = crypto.randomUUID();
+  const recordId = form.get('recordId');
+  const existingIndex = state.expenses.findIndex((row) => row.id === recordId);
+  const existing = existingIndex >= 0 ? state.expenses[existingIndex] : null;
+  const id = existing?.id || crypto.randomUUID();
   let attachment;
   try {
-    attachment = await attachmentFromForm(form, id);
+    attachment = await attachmentFromForm(form, id, existing?.attachment || null);
   } catch (error) {
     showToast(error.message || 'No fue posible guardar el archivo de respaldo.');
     return;
   }
-  state.expenses.push({ id, date, propertyId: form.get('propertyId'), category: form.get('category'), vendor: form.get('vendor'), detail: form.get('detail'), amount, status: form.get('status'), attachment });
+  const expense = { id, date, propertyId: form.get('propertyId'), category: form.get('category'), vendor: form.get('vendor'), detail: form.get('detail'), amount, status: form.get('status'), attachment };
+  if (existingIndex >= 0) state.expenses[existingIndex] = expense;
+  else state.expenses.push(expense);
   $('#monthFilter').value = monthKey(date);
   localStorage.setItem(MONTH_FILTER_KEY, monthKey(date));
   persist(); formElement.reset(); $('#expenseDialog').close(); renderAll();
-  showToast(`Egreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
+  showToast(existing ? `Egreso actualizado a ${fmtMoney.format(amount)}.` : `Egreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
 }
 
-async function attachmentFromForm(form, id) {
+async function attachmentFromForm(form, id, currentAttachment = null) {
   const file = form.get('evidence');
-  if (!(file instanceof File) || !file.size) return null;
+  if (!(file instanceof File) || !file.size) return currentAttachment;
   if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('El respaldo supera el maximo permitido de 20 MB.');
   await saveAttachment(id, file);
   return { name: file.name, type: file.type, size: file.size };

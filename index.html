@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Administracion de Departamentos</title>
   <meta name="description" content="Control de propiedades, arriendos, dividendos y gastos operacionales." />
-  <link rel="stylesheet" href="styles.css?v=20260806-7" />
+  <link rel="stylesheet" href="styles.css?v=20260806-8" />
 </head>
 <body>
   <header class="topbar">
@@ -129,7 +129,8 @@
 
   <dialog id="incomeDialog">
     <form method="dialog" id="incomeForm" class="entry-form">
-      <h2>Nuevo ingreso</h2>
+      <h2 id="incomeFormTitle">Nuevo ingreso</h2>
+      <input name="recordId" type="hidden" />
       <label>Fecha <input name="date" type="date" required /></label>
       <label>Propiedad <select name="propertyId" required></select></label>
       <label>Arrendatario <input name="tenant" /></label>
@@ -137,13 +138,15 @@
       <label>Estado <select name="status"><option>Pagado</option><option>Pendiente</option><option>Atrasado</option></select></label>
       <label>Observacion <textarea name="notes"></textarea></label>
       <label class="file-field">Archivo de respaldo <input name="evidence" type="file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" /><small>PDF, imagen o archivo Office. Maximo 20 MB. Queda guardado en este navegador.</small></label>
-      <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button value="default">Guardar</button></div>
+      <p id="incomeCurrentAttachment" class="current-attachment"></p>
+      <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button id="incomeSubmit" value="default">Guardar</button></div>
     </form>
   </dialog>
 
   <dialog id="expenseDialog">
     <form method="dialog" id="expenseForm" class="entry-form">
-      <h2>Nuevo gasto</h2>
+      <h2 id="expenseFormTitle">Nuevo gasto</h2>
+      <input name="recordId" type="hidden" />
       <label>Fecha <input name="date" type="date" required /></label>
       <label>Propiedad <select name="propertyId" required></select></label>
       <label>Categoria <select name="category"><option>Dividendo</option><option>Contribuciones</option><option>Gastos comunes</option><option>Seguro</option><option>Mantencion</option><option>Reparacion</option><option>Gastos operacionales</option><option>Otro</option></select></label>
@@ -152,11 +155,12 @@
       <label>Monto CLP <input name="amount" type="number" min="0" step="any" inputmode="numeric" required /></label>
       <label>Estado <select name="status"><option>Pagado</option><option>Pendiente</option><option>Atrasado</option></select></label>
       <label class="file-field">Archivo de respaldo <input name="evidence" type="file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" /><small>PDF, imagen o archivo Office. Maximo 20 MB. Queda guardado en este navegador.</small></label>
-      <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button value="default">Guardar</button></div>
+      <p id="expenseCurrentAttachment" class="current-attachment"></p>
+      <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button id="expenseSubmit" value="default">Guardar</button></div>
     </form>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=20260806-7" type="module"></script>
+  <script src="app.js?v=20260806-8" type="module"></script>
 </body>
 </html>
