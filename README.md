@@ -31,6 +31,8 @@ Para activar el envio real, agrega estos secretos en GitHub: `Settings > Secrets
 
 En Gmail debes crear una clave de aplicacion, no usar tu clave normal.
 
+Para probarlo manualmente, entra en GitHub a `Actions > Alertas hipotecarias > Run workflow` y selecciona `enviar_prueba = true`. Si los secretos estan correctos, deberia llegar un correo de prueba aunque no exista un vencimiento exactamente a 3 dias.
+
 ## Publicacion en GitHub Pages
 
 El flujo `.github/workflows/pages.yml` publica el sistema como sitio estatico cuando hay cambios en la rama `main`.

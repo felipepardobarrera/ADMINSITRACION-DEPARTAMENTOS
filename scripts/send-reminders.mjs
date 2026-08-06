@@ -3,15 +3,24 @@ import nodemailer from 'nodemailer';
 
 const DATA_FILE = new URL('../data/properties.json', import.meta.url);
 const DAYS_BEFORE = Number(process.env.ALERT_DAYS_BEFORE || 3);
+const SEND_TEST = process.env.ALERT_SEND_TEST === 'true';
 const fallbackRecipient = 'FPARDO1996@GMAIL.COM';
 
 const data = JSON.parse(await fs.readFile(DATA_FILE, 'utf8'));
 const today = todayInChile();
-const alerts = data.mortgages.map((mortgage) => {
+let alerts = data.mortgages.map((mortgage) => {
   const dueDate = nextDueDate(mortgage, today);
   const property = data.properties.find((item) => item.id === mortgage.propertyId) || {};
   return { mortgage, property, dueDate, daysLeft: daysBetween(today, dueDate) };
 }).filter((item) => item.daysLeft === DAYS_BEFORE);
+
+if (SEND_TEST && !alerts.length) {
+  alerts = data.mortgages.map((mortgage) => {
+    const dueDate = nextDueDate(mortgage, today);
+    const property = data.properties.find((item) => item.id === mortgage.propertyId) || {};
+    return { mortgage, property, dueDate, daysLeft: daysBetween(today, dueDate) };
+  }).sort((a, b) => a.daysLeft - b.daysLeft).slice(0, 2);
+}
 
 if (!alerts.length) {
   console.log(`Sin alertas para ${today.toISOString().slice(0, 10)}.`);
@@ -32,7 +41,7 @@ const transporter = nodemailer.createTransport({
 });
 
 const to = process.env.ALERT_TO || data.ownerEmail || fallbackRecipient;
-const subject = `Alerta dividendo hipotecario: vence en ${DAYS_BEFORE} dias`;
+const subject = SEND_TEST ? 'Prueba de alertas hipotecarias' : `Alerta dividendo hipotecario: vence en ${DAYS_BEFORE} dias`;
 const html = buildEmail(alerts);
 await transporter.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, html });
 console.log(`Alerta enviada a ${to}.`);

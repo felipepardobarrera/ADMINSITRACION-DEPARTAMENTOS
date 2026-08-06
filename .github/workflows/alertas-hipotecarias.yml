@@ -4,6 +4,15 @@ on:
   schedule:
     - cron: '0 12 * * *'
   workflow_dispatch:
+    inputs:
+      enviar_prueba:
+        description: 'Enviar correo de prueba aunque no haya vencimientos a 3 dias'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   alertas:
@@ -27,3 +36,4 @@ jobs:
           SMTP_FROM: ${{ secrets.SMTP_FROM }}
           ALERT_TO: ${{ secrets.ALERT_TO }}
           ALERT_DAYS_BEFORE: 3
+          ALERT_SEND_TEST: ${{ inputs.enviar_prueba || 'false' }}
