@@ -8,6 +8,9 @@ Sistema personal para controlar propiedades, dividendos hipotecarios, ingresos p
 - Registro de ingresos por arriendo.
 - Registro de gastos: dividendos, contribuciones, gastos comunes, seguros, mantenciones y otros.
 - Control de proximos vencimientos hipotecarios.
+- Informacion sincronizada entre computadores mediante Supabase.
+- Vista publica de solo lectura y acceso privado de administrador.
+- Respaldos documentales privados en la nube.
 - Importacion y exportacion de respaldo JSON.
 - Exportacion CSV para revisar en Excel.
 - Alerta automatica por correo 3 dias antes del vencimiento del dividendo mediante GitHub Actions.
@@ -39,6 +42,8 @@ GitHub Pages publica automaticamente el sitio desde la rama `main`. No se necesi
 
 El archivo `.gitlab-ci.yml` comprueba el sistema y publica el sitio automaticamente desde la rama principal.
 
+Enlace publico: https://administracion-departamentos-publico-f73f00.gitlab.io/
+
 Para activar las alertas en GitLab:
 
 1. Agrega `SMTP_PASS` en `Settings > CI/CD > Variables` como variable enmascarada.
@@ -47,6 +52,25 @@ Para activar las alertas en GitLab:
 
 GitHub puede mantenerse como respaldo del mismo repositorio.
 
+## Acceso y sincronizacion
+
+El sitio publicado muestra la informacion financiera en modo de solo lectura. Para modificarla, pulsa `Ingresar` e inicia sesion con `FPARDO1996@GMAIL.COM`.
+
+La primera vez, pulsa `Crear acceso inicial`, elige una contrasena de al menos 8 caracteres y confirma el mensaje que llegara al correo. Despues podras usar esa misma cuenta en cualquier computador.
+
+Los ingresos, gastos, propiedades y dividendos se guardan en Supabase. Los archivos adjuntos se almacenan en un espacio privado y solo el administrador puede abrirlos o descargarlos.
+
+### Recuperar registros del computador anterior
+
+Los datos que se ingresaron antes de activar la nube permanecen en el navegador de ese computador. Para trasladarlos:
+
+1. Abre el sistema en el computador anterior.
+2. Ingresa como administrador.
+3. Pulsa `Exportar respaldo`.
+4. En el computador nuevo, ingresa como administrador y pulsa `Importar respaldo`.
+
+La importacion sincroniza los registros y los archivos adjuntos con la nube. Conviene conservar el archivo exportado como copia adicional.
+
 ## Uso diario
 
-Abre `index.html`, registra pagos de arriendo y gastos, y usa `Exportar respaldo` cuando quieras guardar una copia de tus cambios.
+Abre el sitio publicado, inicia sesion cuando necesites editar y usa `Exportar respaldo` periodicamente para guardar una copia adicional de tus datos.
