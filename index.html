@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Administracion de Departamentos</title>
   <meta name="description" content="Control de propiedades, arriendos, dividendos y gastos operacionales." />
-  <link rel="stylesheet" href="styles.css?v=20260806-9" />
+  <link rel="stylesheet" href="styles.css?v=20260807-1" />
 </head>
 <body>
   <header class="topbar">
@@ -14,9 +14,11 @@
       <h1>Administracion de Departamentos</h1>
     </div>
     <div class="top-actions">
+      <span id="accessMode" class="access-mode">Vista publica</span>
       <label class="month-picker">Mes <input id="monthFilter" type="month" /></label>
-      <button id="exportBackup" type="button">Exportar respaldo</button>
-      <label class="ghost-file">Importar respaldo<input id="importBackup" type="file" accept="application/json" /></label>
+      <button id="exportBackup" data-admin-only hidden type="button">Exportar respaldo</button>
+      <label class="ghost-file" data-admin-only hidden>Importar respaldo<input id="importBackup" type="file" accept="application/json" /></label>
+      <button id="authButton" class="secondary" type="button">Ingresar</button>
     </div>
   </header>
 
@@ -92,22 +94,22 @@
       </section>
 
       <section id="properties" class="tab-panel">
-        <div class="section-head"><h2>Fichas de propiedades</h2><button id="saveProperties" type="button">Guardar cambios</button></div>
+        <div class="section-head"><h2>Fichas de propiedades</h2><button id="saveProperties" data-admin-only hidden type="button">Guardar cambios</button></div>
         <div id="propertyCards" class="property-grid"></div>
       </section>
 
       <section id="income" class="tab-panel">
-        <div class="section-head"><h2>Ingresos por arriendo</h2><button data-open="incomeDialog" type="button">Agregar ingreso</button></div>
+        <div class="section-head"><h2>Ingresos por arriendo</h2><button data-open="incomeDialog" data-admin-only hidden type="button">Agregar ingreso</button></div>
         <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Propiedad</th><th>Arrendatario</th><th>Monto</th><th>Estado</th><th>Nota</th><th>Respaldo</th><th></th></tr></thead><tbody id="incomeRows"></tbody></table></div>
       </section>
 
       <section id="expenses" class="tab-panel">
-        <div class="section-head"><h2>Gastos operacionales</h2><button data-open="expenseDialog" type="button">Agregar gasto</button></div>
+        <div class="section-head"><h2>Gastos operacionales</h2><button data-open="expenseDialog" data-admin-only hidden type="button">Agregar gasto</button></div>
         <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Propiedad</th><th>Categoria</th><th>Detalle</th><th>Monto</th><th>Estado</th><th>Respaldo</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div>
       </section>
 
       <section id="mortgages" class="tab-panel">
-        <div class="section-head"><h2>Creditos hipotecarios</h2><button id="saveMortgages" type="button">Guardar cambios</button></div>
+        <div class="section-head"><h2>Creditos hipotecarios</h2><button id="saveMortgages" data-admin-only hidden type="button">Guardar cambios</button></div>
         <div id="mortgageCards" class="property-grid"></div>
       </section>
 
@@ -137,7 +139,7 @@
       <label>Monto CLP <input name="amount" type="number" min="0" step="any" inputmode="numeric" required /></label>
       <label>Estado <select name="status"><option>Pagado</option><option>Pendiente</option><option>Atrasado</option></select></label>
       <label>Observacion <textarea name="notes"></textarea></label>
-      <label class="file-field">Archivo de respaldo <input name="evidence" type="file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" /><small>PDF, imagen o archivo Office. Maximo 20 MB. Queda guardado en este navegador.</small></label>
+      <label class="file-field">Archivo de respaldo <input name="evidence" type="file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" /><small>PDF, imagen o archivo Office. Maximo 20 MB. Queda guardado en la nube y solo el administrador puede abrirlo.</small></label>
       <p id="incomeCurrentAttachment" class="current-attachment"></p>
       <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button id="incomeSubmit" value="default">Guardar</button></div>
     </form>
@@ -154,13 +156,27 @@
       <label>Detalle <input name="detail" /></label>
       <label>Monto CLP <input name="amount" type="number" min="0" step="any" inputmode="numeric" required /></label>
       <label>Estado <select name="status"><option>Pagado</option><option>Pendiente</option><option>Atrasado</option></select></label>
-      <label class="file-field">Archivo de respaldo <input name="evidence" type="file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" /><small>PDF, imagen o archivo Office. Maximo 20 MB. Queda guardado en este navegador.</small></label>
+      <label class="file-field">Archivo de respaldo <input name="evidence" type="file" accept=".pdf,image/*,.doc,.docx,.xls,.xlsx" /><small>PDF, imagen o archivo Office. Maximo 20 MB. Queda guardado en la nube y solo el administrador puede abrirlo.</small></label>
       <p id="expenseCurrentAttachment" class="current-attachment"></p>
       <div class="dialog-actions"><button value="cancel" type="button" data-close>Cancelar</button><button id="expenseSubmit" value="default">Guardar</button></div>
     </form>
   </dialog>
 
+  <dialog id="authDialog">
+    <form id="authForm" class="entry-form">
+      <h2>Acceso de administrador</h2>
+      <p class="auth-note">Los visitantes pueden consultar el panel. Solo el administrador puede modificar la informacion.</p>
+      <label>Correo <input name="email" type="email" value="FPARDO1996@GMAIL.COM" readonly /></label>
+      <label>Contrasena <input name="password" type="password" minlength="8" autocomplete="current-password" required /></label>
+      <div class="dialog-actions auth-actions">
+        <button type="button" data-close>Cancelar</button>
+        <button id="createAdminAccess" class="secondary" type="button">Crear acceso inicial</button>
+        <button type="submit">Ingresar</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=20260806-9" type="module"></script>
+  <script src="app.js?v=20260807-2" type="module"></script>
 </body>
 </html>

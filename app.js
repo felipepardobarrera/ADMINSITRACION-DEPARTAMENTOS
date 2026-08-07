@@ -1,28 +1,107 @@
 ﻿const DATA_URL = './data/properties.json';
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.56.0/+esm';
+
 const STORAGE_KEY = 'administracion-departamentos-v1';
+const LEGACY_RECOVERY_KEY = 'administracion-departamentos-recuperacion-v1';
 const MONTH_FILTER_KEY = 'administracion-departamentos-mes';
 const ATTACHMENT_DB_NAME = 'administracion-departamentos-archivos';
 const ATTACHMENT_STORE = 'respaldos';
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
+const SUPABASE_URL = 'https://hkvfqmzvuuseshroacqb.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_r7Nu9wLPFlG_pa4h0ig2jw_nKunjdXq';
+const ADMIN_EMAIL = 'fpardo1996@gmail.com';
+const CLOUD_ROW_ID = 'main';
+const DOCUMENT_BUCKET = 'documentos';
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const fmtMoney = new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 });
 const fmtDate = new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium' });
 const fmtMonth = new Intl.DateTimeFormat('es-CL', { month: 'short', year: 'numeric' });
 let state;
 let toastTimer;
+let session = null;
+let isAdmin = false;
+let cloudSubscription = null;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 async function boot() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    state = JSON.parse(saved);
-  } else {
-    state = await fetch(DATA_URL).then((r) => r.json());
-    persist();
-  }
+  const authResult = await supabase.auth.getSession();
+  session = authResult.data.session;
+  isAdmin = isAdminSession(session);
+  await loadState();
   $('#monthFilter').value = localStorage.getItem(MONTH_FILTER_KEY) || latestActivityMonth() || currentMonth();
   bindEvents();
   renderAll();
+  applyAccessMode();
+  subscribeToCloudUpdates();
+  supabase.auth.onAuthStateChange((_event, nextSession) => {
+    session = nextSession;
+    isAdmin = isAdminSession(session);
+    setTimeout(async () => {
+      await loadState();
+      renderAll();
+      applyAccessMode();
+    }, 0);
+  });
+}
+
+function isAdminSession(value) {
+  return value?.user?.email?.toLowerCase() === ADMIN_EMAIL;
+}
+
+async function loadState() {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  const localState = parseStoredState(saved);
+  const { data, error } = await supabase.from('portfolio_state').select('data, updated_by').eq('id', CLOUD_ROW_ID).single();
+  if (!error && data?.data) {
+    if (localState && hasMissingLocalRecords(localState, data.data)) {
+      localStorage.setItem(LEGACY_RECOVERY_KEY, JSON.stringify({ state: localState, replaceSettings: !data.updated_by }));
+    }
+    state = data.data;
+    const recovery = parseStoredState(localStorage.getItem(LEGACY_RECOVERY_KEY));
+    if (isAdmin && recovery?.state) {
+      state = mergeRecoveredState(state, recovery);
+      try {
+        await persist();
+        localStorage.removeItem(LEGACY_RECOVERY_KEY);
+        showToast('Los movimientos guardados en este computador se sincronizaron con la nube.');
+      } catch {
+        showToast('Encontramos movimientos anteriores, pero aun no fue posible sincronizarlos.');
+      }
+    }
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    return;
+  }
+  state = localState || await fetch(DATA_URL).then((response) => response.json());
+  showToast('No fue posible conectar con la nube. Se muestra la ultima copia disponible.');
+}
+
+function parseStoredState(value) {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function hasMissingLocalRecords(local, cloud) {
+  const cloudIds = new Set([...(cloud.income || []), ...(cloud.expenses || [])].map((row) => row.id));
+  return [...(local.income || []), ...(local.expenses || [])].some((row) => row.id && !cloudIds.has(row.id));
+}
+
+function mergeRecoveredState(cloud, recovery) {
+  const legacy = recovery.state;
+  const merged = recovery.replaceSettings ? { ...cloud, ...legacy } : { ...cloud };
+  merged.income = mergeRecordLists(cloud.income, legacy.income);
+  merged.expenses = mergeRecordLists(cloud.expenses, legacy.expenses);
+  return merged;
+}
+
+function mergeRecordLists(cloudRows = [], localRows = []) {
+  const rows = new Map(cloudRows.map((row) => [row.id, row]));
+  localRows.forEach((row) => rows.set(row.id, row));
+  return [...rows.values()];
 }
 
 function currentMonth() {
@@ -34,8 +113,28 @@ function latestActivityMonth() {
   return [...state.income, ...state.expenses].map((row) => monthKey(row.date)).filter(Boolean).sort().at(-1) || '';
 }
 
-function persist() {
+async function persist() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!isAdmin) throw new Error('Solo el administrador puede guardar cambios.');
+  const { error } = await supabase.from('portfolio_state').update({
+    data: state,
+    updated_at: new Date().toISOString(),
+    updated_by: session.user.id,
+  }).eq('id', CLOUD_ROW_ID);
+  if (error) throw error;
+}
+
+function subscribeToCloudUpdates() {
+  cloudSubscription?.unsubscribe();
+  cloudSubscription = supabase.channel('portfolio-publico')
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'portfolio_state', filter: `id=eq.${CLOUD_ROW_ID}` }, (payload) => {
+      state = payload.new.data;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      renderAll();
+      applyAccessMode();
+      showToast('Informacion actualizada desde la nube.');
+    })
+    .subscribe();
 }
 
 function attachmentDb() {
@@ -49,7 +148,7 @@ function attachmentDb() {
   });
 }
 
-async function saveAttachment(id, file) {
+async function saveLocalAttachment(id, file) {
   const db = await attachmentDb();
   await new Promise((resolve, reject) => {
     const transaction = db.transaction(ATTACHMENT_STORE, 'readwrite');
@@ -60,7 +159,7 @@ async function saveAttachment(id, file) {
   db.close();
 }
 
-async function getAttachment(id) {
+async function getLocalAttachment(id) {
   const db = await attachmentDb();
   const file = await new Promise((resolve, reject) => {
     const request = db.transaction(ATTACHMENT_STORE, 'readonly').objectStore(ATTACHMENT_STORE).get(id);
@@ -71,7 +170,7 @@ async function getAttachment(id) {
   return file;
 }
 
-async function deleteAttachment(id) {
+async function deleteLocalAttachment(id) {
   const db = await attachmentDb();
   await new Promise((resolve, reject) => {
     const transaction = db.transaction(ATTACHMENT_STORE, 'readwrite');
@@ -80,6 +179,36 @@ async function deleteAttachment(id) {
     transaction.onerror = () => reject(transaction.error);
   });
   db.close();
+}
+
+async function saveAttachment(id, file) {
+  if (!requireAdmin()) throw new Error('Solo el administrador puede subir respaldos.');
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${id}/${crypto.randomUUID()}-${safeName}`;
+  const { error } = await supabase.storage.from(DOCUMENT_BUCKET).upload(path, file, {
+    contentType: file.type || 'application/octet-stream',
+    upsert: false,
+  });
+  if (error) throw error;
+  return path;
+}
+
+async function getAttachment(id) {
+  const record = [...state.income, ...state.expenses].find((item) => item.id === id);
+  if (record?.attachment?.path && isAdmin) {
+    const { data, error } = await supabase.storage.from(DOCUMENT_BUCKET).download(record.attachment.path);
+    if (error) throw error;
+    return new File([data], record.attachment.name || 'respaldo', { type: record.attachment.type || data.type });
+  }
+  return getLocalAttachment(id);
+}
+
+async function deleteAttachment(id, attachment) {
+  if (attachment?.path && isAdmin) {
+    const { error } = await supabase.storage.from(DOCUMENT_BUCKET).remove([attachment.path]);
+    if (error) throw error;
+  }
+  await deleteLocalAttachment(id).catch(() => {});
 }
 
 function propertyName(id) {
@@ -188,6 +317,7 @@ function renderAll() {
   renderIncome();
   renderExpenses();
   renderReports();
+  applyAccessMode();
 }
 
 function renderKpis() {
@@ -342,15 +472,16 @@ function renderMortgages() {
 }
 
 function renderIncome() {
-  $('#incomeRows').innerHTML = [...state.income].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.tenant || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${escapeHtml(row.notes || '')}</td><td>${attachmentCell(row)}</td><td><div class="row-actions"><button class="small secondary" data-edit-income="${row.id}" type="button">Editar</button><button class="small danger" data-delete-income="${row.id}" type="button">Eliminar</button></div></td></tr>`).join('');
+  $('#incomeRows').innerHTML = [...state.income].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.tenant || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${escapeHtml(row.notes || '')}</td><td>${attachmentCell(row)}</td><td>${isAdmin ? `<div class="row-actions"><button class="small secondary" data-edit-income="${row.id}" type="button">Editar</button><button class="small danger" data-delete-income="${row.id}" type="button">Eliminar</button></div>` : ''}</td></tr>`).join('');
 }
 
 function renderExpenses() {
-  $('#expenseRows').innerHTML = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.category || '')}</td><td>${escapeHtml(row.detail || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${attachmentCell(row)}</td><td><div class="row-actions"><button class="small secondary" data-edit-expense="${row.id}" type="button">Editar</button><button class="small danger" data-delete-expense="${row.id}" type="button">Eliminar</button></div></td></tr>`).join('');
+  $('#expenseRows').innerHTML = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.category || '')}</td><td>${escapeHtml(row.detail || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${attachmentCell(row)}</td><td>${isAdmin ? `<div class="row-actions"><button class="small secondary" data-edit-expense="${row.id}" type="button">Editar</button><button class="small danger" data-delete-expense="${row.id}" type="button">Eliminar</button></div>` : ''}</td></tr>`).join('');
 }
 
 function attachmentCell(row) {
   if (!row.attachment) return '<span class="no-attachment">Sin archivo</span>';
+  if (!isAdmin) return '<span class="no-attachment">Respaldo privado</span>';
   return `<div class="attachment-actions"><span title="${escapeAttr(row.attachment.name)}">${escapeHtml(row.attachment.name)}</span><div><button class="small secondary" data-open-attachment="${row.id}" type="button">Abrir</button><button class="small secondary" data-download-attachment="${row.id}" type="button">Descargar</button></div></div>`;
 }
 
@@ -389,6 +520,9 @@ function bindEvents() {
   $('#saveMortgages').addEventListener('click', saveMortgages);
   $('#exportBackup').addEventListener('click', exportBackup);
   $('#importBackup').addEventListener('change', importBackup);
+  $('#authButton').addEventListener('click', handleAuthButton);
+  $('#authForm').addEventListener('submit', signInAdmin);
+  $('#createAdminAccess').addEventListener('click', createAdminAccess);
   $('#downloadMonthly').addEventListener('click', () => downloadCsv('resultado-mensual.csv', monthlyRows()));
   $('#downloadCashflow').addEventListener('click', () => downloadCsv('flujo-de-caja.csv', cashFlowRows()));
   $('#downloadCalendar').addEventListener('click', () => downloadCsv('vencimientos.csv', alertRows()));
@@ -405,18 +539,91 @@ function bindEvents() {
     if (editIncomeButton) editIncome(editIncomeButton.dataset.editIncome);
     if (editExpenseButton) editExpense(editExpenseButton.dataset.editExpense);
     if (incomeButton) {
+      if (!requireAdmin()) return;
       const id = incomeButton.dataset.deleteIncome;
+      const record = state.income.find((row) => row.id === id);
       state.income = state.income.filter((row) => row.id !== id);
-      await deleteAttachment(id).catch(() => {});
-      persist(); renderAll();
+      await deleteAttachment(id, record?.attachment).catch(() => {});
+      try {
+        await persist(); renderAll(); applyAccessMode(); showToast('Ingreso eliminado.');
+      } catch (error) {
+        showToast(error.message || 'No fue posible eliminar el ingreso.');
+      }
     }
     if (expenseButton) {
+      if (!requireAdmin()) return;
       const id = expenseButton.dataset.deleteExpense;
+      const record = state.expenses.find((row) => row.id === id);
       state.expenses = state.expenses.filter((row) => row.id !== id);
-      await deleteAttachment(id).catch(() => {});
-      persist(); renderAll();
+      await deleteAttachment(id, record?.attachment).catch(() => {});
+      try {
+        await persist(); renderAll(); applyAccessMode(); showToast('Egreso eliminado.');
+      } catch (error) {
+        showToast(error.message || 'No fue posible eliminar el egreso.');
+      }
     }
   });
+}
+
+function requireAdmin() {
+  if (isAdmin) return true;
+  showToast('Ingresa como administrador para modificar la informacion.');
+  return false;
+}
+
+function applyAccessMode() {
+  $('#accessMode').textContent = isAdmin ? 'Modo administrador' : 'Vista publica';
+  $('#accessMode').classList.toggle('admin', isAdmin);
+  $('#authButton').textContent = isAdmin ? 'Cerrar sesion' : 'Ingresar';
+  $$('[data-admin-only]').forEach((element) => { element.hidden = !isAdmin; });
+  $$('#properties [data-field], #mortgages [data-field]').forEach((field) => { field.disabled = !isAdmin; });
+}
+
+async function handleAuthButton() {
+  if (isAdmin) {
+    await supabase.auth.signOut();
+    showToast('Sesion de administrador cerrada.');
+    return;
+  }
+  $('#authForm').reset();
+  $('#authForm').elements.email.value = ADMIN_EMAIL;
+  $('#authDialog').showModal();
+}
+
+async function signInAdmin(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const { error } = await supabase.auth.signInWithPassword({ email: ADMIN_EMAIL, password: form.get('password') });
+  if (error) {
+    showToast(error.message === 'Invalid login credentials' ? 'Correo o contrasena incorrectos.' : error.message);
+    return;
+  }
+  $('#authDialog').close();
+  event.currentTarget.reset();
+  showToast('Acceso de administrador iniciado.');
+}
+
+async function createAdminAccess() {
+  const password = $('#authForm').elements.password.value;
+  if (password.length < 8) {
+    showToast('La contrasena debe tener al menos 8 caracteres.');
+    return;
+  }
+  const { data, error } = await supabase.auth.signUp({
+    email: ADMIN_EMAIL,
+    password,
+    options: { emailRedirectTo: window.location.href.split('#')[0] },
+  });
+  if (error) {
+    showToast(error.message);
+    return;
+  }
+  if (data.session) {
+    $('#authDialog').close();
+    showToast('Acceso de administrador creado.');
+  } else {
+    showToast('Revisa tu correo y confirma el acceso. Luego vuelve e ingresa.');
+  }
 }
 
 function prepareCreateForm(dialogId) {
@@ -430,6 +637,7 @@ function prepareCreateForm(dialogId) {
 }
 
 function editIncome(id) {
+  if (!requireAdmin()) return;
   const row = state.income.find((item) => item.id === id);
   if (!row) return;
   const form = $('#incomeForm');
@@ -448,6 +656,7 @@ function editIncome(id) {
 }
 
 function editExpense(id) {
+  if (!requireAdmin()) return;
   const row = state.expenses.find((item) => item.id === id);
   if (!row) return;
   const form = $('#expenseForm');
@@ -468,6 +677,7 @@ function editExpense(id) {
 
 async function addIncome(event) {
   event.preventDefault();
+  if (!requireAdmin()) return;
   const formElement = event.currentTarget;
   const form = new FormData(formElement);
   const date = form.get('date');
@@ -488,12 +698,17 @@ async function addIncome(event) {
   else state.income.push(income);
   $('#monthFilter').value = monthKey(date);
   localStorage.setItem(MONTH_FILTER_KEY, monthKey(date));
-  persist(); formElement.reset(); $('#incomeDialog').close(); renderAll();
-  showToast(existing ? `Ingreso actualizado a ${fmtMoney.format(amount)}.` : `Ingreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
+  try {
+    await persist(); formElement.reset(); $('#incomeDialog').close(); renderAll(); applyAccessMode();
+    showToast(existing ? `Ingreso actualizado a ${fmtMoney.format(amount)}.` : `Ingreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
+  } catch (error) {
+    showToast(error.message || 'No fue posible guardar el ingreso en la nube.');
+  }
 }
 
 async function addExpense(event) {
   event.preventDefault();
+  if (!requireAdmin()) return;
   const formElement = event.currentTarget;
   const form = new FormData(formElement);
   const date = form.get('date');
@@ -514,19 +729,25 @@ async function addExpense(event) {
   else state.expenses.push(expense);
   $('#monthFilter').value = monthKey(date);
   localStorage.setItem(MONTH_FILTER_KEY, monthKey(date));
-  persist(); formElement.reset(); $('#expenseDialog').close(); renderAll();
-  showToast(existing ? `Egreso actualizado a ${fmtMoney.format(amount)}.` : `Egreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
+  try {
+    await persist(); formElement.reset(); $('#expenseDialog').close(); renderAll(); applyAccessMode();
+    showToast(existing ? `Egreso actualizado a ${fmtMoney.format(amount)}.` : `Egreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
+  } catch (error) {
+    showToast(error.message || 'No fue posible guardar el egreso en la nube.');
+  }
 }
 
 async function attachmentFromForm(form, id, currentAttachment = null) {
   const file = form.get('evidence');
   if (!(file instanceof File) || !file.size) return currentAttachment;
   if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('El respaldo supera el maximo permitido de 20 MB.');
-  await saveAttachment(id, file);
-  return { name: file.name, type: file.type, size: file.size };
+  const path = await saveAttachment(id, file);
+  if (currentAttachment?.path) await supabase.storage.from(DOCUMENT_BUCKET).remove([currentAttachment.path]);
+  return { name: file.name, type: file.type, size: file.size, path };
 }
 
 async function openAttachment(id, download) {
+  if (!requireAdmin()) return;
   try {
     const file = await getAttachment(id);
     if (!file) {
@@ -554,31 +775,84 @@ function showToast(message) {
   toastTimer = setTimeout(() => toast.classList.remove('visible'), 4200);
 }
 
-function saveProperties() {
+async function saveProperties() {
+  if (!requireAdmin()) return;
   $$('#propertyCards .property-card').forEach((card) => {
     const property = state.properties[Number(card.dataset.index)];
     $$('[data-field]', card).forEach((input) => property[input.dataset.field] = input.type === 'number' ? Number(input.value) : input.value);
   });
-  persist(); renderAll();
+  try {
+    await persist(); renderAll(); applyAccessMode(); showToast('Propiedades guardadas en la nube.');
+  } catch (error) {
+    showToast(error.message || 'No fue posible guardar las propiedades.');
+  }
 }
 
-function saveMortgages() {
+async function saveMortgages() {
+  if (!requireAdmin()) return;
   $$('#mortgageCards .property-card').forEach((card) => {
     const mortgage = state.mortgages[Number(card.dataset.index)];
     $$('[data-field]', card).forEach((input) => mortgage[input.dataset.field] = input.type === 'number' ? Number(input.value) : input.value);
   });
-  persist(); renderAll();
+  try {
+    await persist(); renderAll(); applyAccessMode(); showToast('Dividendos guardados en la nube.');
+  } catch (error) {
+    showToast(error.message || 'No fue posible guardar los dividendos.');
+  }
 }
 
-function exportBackup() {
-  downloadFile(`respaldo-administracion-${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(state, null, 2), 'application/json');
+async function exportBackup() {
+  if (!requireAdmin()) return;
+  const attachments = {};
+  for (const row of [...state.income, ...state.expenses].filter((item) => item.attachment)) {
+    try {
+      const file = await getAttachment(row.id);
+      if (file) attachments[row.id] = { name: file.name, type: file.type, data: await fileToDataUrl(file) };
+    } catch {
+      // The financial records remain usable even if an old local file is unavailable.
+    }
+  }
+  const backup = { formatVersion: 2, exportedAt: new Date().toISOString(), state, attachments };
+  downloadFile(`respaldo-administracion-${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(backup, null, 2), 'application/json');
+  showToast('Respaldo completo generado.');
 }
 
 async function importBackup(event) {
+  if (!requireAdmin()) return;
   const file = event.target.files[0];
   if (!file) return;
-  state = JSON.parse(await file.text());
-  persist(); renderAll(); event.target.value = '';
+  try {
+    const backup = JSON.parse(await file.text());
+    state = backup.state || backup;
+    for (const [id, attachment] of Object.entries(backup.attachments || {})) {
+      const attachmentFile = dataUrlToFile(attachment.data, attachment.name, attachment.type);
+      const path = await saveAttachment(id, attachmentFile);
+      const record = [...state.income, ...state.expenses].find((item) => item.id === id);
+      if (record) record.attachment = { name: attachment.name, type: attachment.type, size: attachmentFile.size, path };
+    }
+    await persist(); renderAll(); applyAccessMode();
+    showToast('Respaldo importado y sincronizado en la nube.');
+  } catch (error) {
+    showToast(error.message || 'El archivo de respaldo no es valido.');
+  } finally {
+    event.target.value = '';
+  }
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+function dataUrlToFile(dataUrl, name, type) {
+  const [header, encoded] = dataUrl.split(',');
+  const mime = type || header.match(/data:([^;]+)/)?.[1] || 'application/octet-stream';
+  const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
+  return new File([bytes], name || 'respaldo', { type: mime });
 }
 
 function monthlyRows() {

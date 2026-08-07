@@ -24,6 +24,9 @@ h1 { margin: 0; font-size: clamp(24px, 4vw, 38px); line-height: 1.1; }
 h2 { margin: 0; font-size: 20px; }
 h3 { margin: 0 0 8px; }
 .top-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.access-mode { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 8px 11px; border: 1px solid rgba(255,255,255,.32); border-radius: 6px; background: rgba(255,255,255,.12); font-size: 13px; font-weight: 700; }
+.access-mode::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #86efac; }
+.access-mode.admin::before { background: #fbbf24; }
 .month-picker { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.12); padding: 8px 10px; border-radius: 6px; }
 .month-picker input { border: 0; border-radius: 4px; padding: 6px; }
 .ghost-file { position: relative; overflow: hidden; display: inline-flex; align-items: center; }
@@ -109,6 +112,7 @@ td.numeric, th.numeric { text-align: right; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 10px; }
 label { color: var(--muted); font-size: 13px; }
 input, select, textarea { width: 100%; margin-top: 5px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); background: #fff; }
+input:disabled, select:disabled, textarea:disabled { color: var(--ink); background: #f4f7fb; opacity: 1; cursor: default; }
 textarea { min-height: 72px; resize: vertical; }
 .file-field { padding: 11px; border: 1px dashed #9aabbf; border-radius: 6px; background: var(--soft); }
 .file-field input { padding: 7px; background: #fff; }
@@ -124,6 +128,10 @@ dialog::backdrop { background: rgba(15, 23, 42, .45); }
 .entry-form { padding: 20px; display: grid; gap: 12px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 .dialog-actions button:first-child { background: #fff; color: var(--blue); }
+.auth-note { margin: 0; color: var(--muted); line-height: 1.45; }
+.auth-actions { flex-wrap: wrap; }
+.auth-actions .secondary { margin-right: auto; }
+[hidden] { display: none !important; }
 .note-box { border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: var(--soft); margin-top: 16px; max-width: 760px; }
 .note-box p { margin: 0; line-height: 1.5; color: var(--muted); }
 .toast { position: fixed; right: 22px; bottom: 22px; z-index: 20; max-width: min(430px, calc(100vw - 28px)); padding: 13px 16px; border-radius: 6px; background: #123b36; color: #fff; box-shadow: 0 12px 35px rgba(15, 23, 42, .24); opacity: 0; transform: translateY(12px); pointer-events: none; transition: opacity .18s ease, transform .18s ease; }
