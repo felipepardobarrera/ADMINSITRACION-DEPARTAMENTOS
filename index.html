@@ -170,13 +170,26 @@
       <label>Contrasena <input name="password" type="password" minlength="8" autocomplete="current-password" required /></label>
       <div class="dialog-actions auth-actions">
         <button type="button" data-close>Cancelar</button>
-        <button id="createAdminAccess" class="secondary" type="button">Crear acceso inicial</button>
+        <button id="recoverAdminAccess" class="secondary" type="button">Olvide mi contrasena</button>
         <button type="submit">Ingresar</button>
       </div>
     </form>
   </dialog>
 
+  <dialog id="passwordDialog">
+    <form id="passwordForm" class="entry-form">
+      <h2>Crear nueva contrasena</h2>
+      <p class="auth-note">Escribe una contrasena de al menos 8 caracteres. Esta sera tu nueva clave de administrador.</p>
+      <label>Nueva contrasena <input name="password" type="password" minlength="8" autocomplete="new-password" required /></label>
+      <label>Repetir contrasena <input name="passwordConfirm" type="password" minlength="8" autocomplete="new-password" required /></label>
+      <div class="dialog-actions">
+        <button type="button" data-close>Cancelar</button>
+        <button type="submit">Guardar contrasena</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=20260807-2" type="module"></script>
+  <script src="app.js?v=20260807-3" type="module"></script>
 </body>
 </html>

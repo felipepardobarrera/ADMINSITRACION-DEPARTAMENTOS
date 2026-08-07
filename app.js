@@ -10,6 +10,7 @@ const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
 const SUPABASE_URL = 'https://hkvfqmzvuuseshroacqb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_r7Nu9wLPFlG_pa4h0ig2jw_nKunjdXq';
 const ADMIN_EMAIL = 'fpardo1996@gmail.com';
+const PUBLIC_APP_URL = 'https://administracion-departamentos-publico-f73f00.gitlab.io/';
 const CLOUD_ROW_ID = 'main';
 const DOCUMENT_BUCKET = 'documentos';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -34,13 +35,16 @@ async function boot() {
   renderAll();
   applyAccessMode();
   subscribeToCloudUpdates();
-  supabase.auth.onAuthStateChange((_event, nextSession) => {
+  if (isPasswordRecoveryRedirect() && isAdmin) openPasswordDialog();
+  showAuthRedirectError();
+  supabase.auth.onAuthStateChange((event, nextSession) => {
     session = nextSession;
     isAdmin = isAdminSession(session);
     setTimeout(async () => {
       await loadState();
       renderAll();
       applyAccessMode();
+      if (event === 'PASSWORD_RECOVERY') openPasswordDialog();
     }, 0);
   });
 }
@@ -522,7 +526,8 @@ function bindEvents() {
   $('#importBackup').addEventListener('change', importBackup);
   $('#authButton').addEventListener('click', handleAuthButton);
   $('#authForm').addEventListener('submit', signInAdmin);
-  $('#createAdminAccess').addEventListener('click', createAdminAccess);
+  $('#recoverAdminAccess').addEventListener('click', sendPasswordRecovery);
+  $('#passwordForm').addEventListener('submit', updateAdminPassword);
   $('#downloadMonthly').addEventListener('click', () => downloadCsv('resultado-mensual.csv', monthlyRows()));
   $('#downloadCashflow').addEventListener('click', () => downloadCsv('flujo-de-caja.csv', cashFlowRows()));
   $('#downloadCalendar').addEventListener('click', () => downloadCsv('vencimientos.csv', alertRows()));
@@ -603,27 +608,59 @@ async function signInAdmin(event) {
   showToast('Acceso de administrador iniciado.');
 }
 
-async function createAdminAccess() {
-  const password = $('#authForm').elements.password.value;
+async function sendPasswordRecovery() {
+  const { error } = await supabase.auth.resetPasswordForEmail(ADMIN_EMAIL, { redirectTo: PUBLIC_APP_URL });
+  if (error) {
+    showToast('No fue posible enviar el correo de recuperacion. Intenta nuevamente en unos minutos.');
+    return;
+  }
+  $('#authDialog').close();
+  showToast('Enviamos un correo para crear una nueva contrasena. Usa solamente el enlace mas reciente.');
+}
+
+function isPasswordRecoveryRedirect() {
+  const hash = new URLSearchParams(window.location.hash.slice(1));
+  const query = new URLSearchParams(window.location.search);
+  return hash.get('type') === 'recovery' || query.get('type') === 'recovery';
+}
+
+function showAuthRedirectError() {
+  const hash = new URLSearchParams(window.location.hash.slice(1));
+  const query = new URLSearchParams(window.location.search);
+  const code = hash.get('error_code') || query.get('error_code');
+  if (code === 'otp_expired') {
+    showToast('Ese enlace ya vencio o fue utilizado. Solicita un correo nuevo desde Olvide mi contrasena.');
+  }
+}
+
+function openPasswordDialog() {
+  if ($('#authDialog').open) $('#authDialog').close();
+  $('#passwordForm').reset();
+  if (!$('#passwordDialog').open) $('#passwordDialog').showModal();
+}
+
+async function updateAdminPassword(event) {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  const password = String(form.get('password') || '');
+  const confirmation = String(form.get('passwordConfirm') || '');
   if (password.length < 8) {
     showToast('La contrasena debe tener al menos 8 caracteres.');
     return;
   }
-  const { data, error } = await supabase.auth.signUp({
-    email: ADMIN_EMAIL,
-    password,
-    options: { emailRedirectTo: window.location.href.split('#')[0] },
-  });
-  if (error) {
-    showToast(error.message);
+  if (password !== confirmation) {
+    showToast('Las contrasenas no coinciden.');
     return;
   }
-  if (data.session) {
-    $('#authDialog').close();
-    showToast('Acceso de administrador creado.');
-  } else {
-    showToast('Revisa tu correo y confirma el acceso. Luego vuelve e ingresa.');
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) {
+    showToast('No fue posible guardar la contrasena. Solicita un enlace de recuperacion nuevo.');
+    return;
   }
+  $('#passwordDialog').close();
+  event.currentTarget.reset();
+  window.history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+  showToast('Contrasena actualizada. Ya tienes acceso de administrador.');
 }
 
 function prepareCreateForm(dialogId) {

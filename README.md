@@ -56,7 +56,7 @@ GitHub puede mantenerse como respaldo del mismo repositorio.
 
 El sitio publicado muestra la informacion financiera en modo de solo lectura. Para modificarla, pulsa `Ingresar` e inicia sesion con `FPARDO1996@GMAIL.COM`.
 
-La primera vez, pulsa `Crear acceso inicial`, elige una contrasena de al menos 8 caracteres y confirma el mensaje que llegara al correo. Despues podras usar esa misma cuenta en cualquier computador.
+Si no recuerdas tu clave, pulsa `Olvide mi contrasena`. Usa solamente el enlace del correo mas reciente y el sitio te pedira crear una contrasena nueva de al menos 8 caracteres.
 
 Los ingresos, gastos, propiedades y dividendos se guardan en Supabase. Los archivos adjuntos se almacenan en un espacio privado y solo el administrador puede abrirlos o descargarlos.
 
