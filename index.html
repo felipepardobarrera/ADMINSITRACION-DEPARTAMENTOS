@@ -99,18 +99,31 @@
       </section>
 
       <section id="income" class="tab-panel">
-        <div class="section-head"><h2>Ingresos por arriendo</h2><button data-open="incomeDialog" data-admin-only hidden type="button">Agregar ingreso</button></div>
+        <div class="section-head movement-heading">
+          <div>
+            <h2>Ingresos por arriendo</h2>
+            <p id="incomeFilterSummary" class="filter-summary" aria-live="polite"></p>
+          </div>
+          <div class="movement-tools">
+            <label class="property-filter">Mostrar edificio
+              <select id="incomePropertyFilter" aria-label="Filtrar ingresos por edificio">
+                <option value="">Todos los edificios</option>
+              </select>
+            </label>
+            <button data-open="incomeDialog" data-admin-only hidden type="button">Agregar ingreso</button>
+          </div>
+        </div>
         <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Propiedad</th><th>Arrendatario</th><th>Monto</th><th>Estado</th><th>Nota</th><th>Respaldo</th><th></th></tr></thead><tbody id="incomeRows"></tbody></table></div>
       </section>
 
       <section id="expenses" class="tab-panel">
-        <div class="section-head expense-heading">
+        <div class="section-head movement-heading">
           <div>
             <h2>Gastos operacionales</h2>
             <p id="expenseFilterSummary" class="filter-summary" aria-live="polite"></p>
           </div>
-          <div class="expense-tools">
-            <label class="expense-filter">Mostrar edificio
+          <div class="movement-tools">
+            <label class="property-filter">Mostrar edificio
               <select id="expensePropertyFilter" aria-label="Filtrar gastos por edificio">
                 <option value="">Todos los edificios</option>
               </select>
@@ -219,7 +232,7 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="app.js?v=20260823-1" type="module"></script>
+  <script src="app.js?v=20260823-2" type="module"></script>
 </body>
 </html>
 
