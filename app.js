@@ -5,6 +5,7 @@ import { BACKUP_FORMAT_VERSION, cloneData, safeCsvCell, validateBackupDocument, 
 const STORAGE_KEY = 'administracion-departamentos-v1';
 const LEGACY_RECOVERY_KEY = 'administracion-departamentos-recuperacion-v1';
 const MONTH_FILTER_KEY = 'administracion-departamentos-mes';
+const INCOME_PROPERTY_FILTER_KEY = 'administracion-departamentos-filtro-ingresos-propiedad';
 const EXPENSE_PROPERTY_FILTER_KEY = 'administracion-departamentos-filtro-gastos-propiedad';
 const RESTORE_POINTS_KEY = 'administracion-departamentos-puntos-restauracion-v1';
 const RESTORE_POINTS_LIMIT = 8;
@@ -566,7 +567,19 @@ function renderMortgages() {
 }
 
 function renderIncome() {
-  $('#incomeRows').innerHTML = [...state.income].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(propertyName(row.propertyId))}</td><td>${escapeHtml(row.tenant || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${escapeHtml(row.status || '')}</td><td>${escapeHtml(row.notes || '')}</td><td>${attachmentCell(row)}</td><td>${isAdmin ? `<div class="row-actions"><button class="small secondary" data-edit-income="${escapeAttr(row.id)}" type="button">Editar</button><button class="small danger" data-delete-income="${escapeAttr(row.id)}" type="button">Eliminar</button></div>` : ''}</td></tr>`).join('');
+  const selectedPropertyId = $('#incomePropertyFilter')?.value || '';
+  const income = state.income
+    .filter((row) => !selectedPropertyId || row.propertyId === selectedPropertyId)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const total = income.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const selectedProperty = state.properties.find((property) => property.id === selectedPropertyId);
+  const scope = selectedProperty ? buildingPropertyLabel(selectedProperty) : 'Todos los edificios';
+  const recordLabel = income.length === 1 ? '1 ingreso' : `${income.length} ingresos`;
+
+  $('#incomeFilterSummary').textContent = `${scope} · ${recordLabel} · Total ${fmtMoney.format(total)}`;
+  $('#incomeRows').innerHTML = income.length
+    ? income.map((row) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(propertyName(row.propertyId))}</td><td>${escapeHtml(row.tenant || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${escapeHtml(row.status || '')}</td><td>${escapeHtml(row.notes || '')}</td><td>${attachmentCell(row)}</td><td>${isAdmin ? `<div class="row-actions"><button class="small secondary" data-edit-income="${escapeAttr(row.id)}" type="button">Editar</button><button class="small danger" data-delete-income="${escapeAttr(row.id)}" type="button">Eliminar</button></div>` : ''}</td></tr>`).join('')
+    : `<tr><td colspan="8" class="empty-state">No hay ingresos registrados para ${escapeHtml(scope)}.</td></tr>`;
 }
 
 function renderExpenses() {
@@ -576,7 +589,7 @@ function renderExpenses() {
     .sort((a, b) => b.date.localeCompare(a.date));
   const total = expenses.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   const selectedProperty = state.properties.find((property) => property.id === selectedPropertyId);
-  const scope = selectedProperty ? expensePropertyLabel(selectedProperty) : 'Todos los edificios';
+  const scope = selectedProperty ? buildingPropertyLabel(selectedProperty) : 'Todos los edificios';
   const recordLabel = expenses.length === 1 ? '1 gasto' : `${expenses.length} gastos`;
 
   $('#expenseFilterSummary').textContent = `${scope} · ${recordLabel} · Total ${fmtMoney.format(total)}`;
@@ -603,14 +616,19 @@ function fillPropertyOptions() {
     select.innerHTML = state.properties.map((property) => `<option value="${escapeAttr(property.id)}">${escapeHtml(propertyName(property.id))}</option>`).join('');
   });
 
-  const expenseFilter = $('#expensePropertyFilter');
-  if (!expenseFilter) return;
-  const currentValue = expenseFilter.value || localStorage.getItem(EXPENSE_PROPERTY_FILTER_KEY) || '';
-  expenseFilter.innerHTML = `<option value="">Todos los edificios</option>${state.properties.map((property) => `<option value="${escapeAttr(property.id)}">${escapeHtml(expensePropertyLabel(property))}</option>`).join('')}`;
-  expenseFilter.value = state.properties.some((property) => property.id === currentValue) ? currentValue : '';
+  fillMovementPropertyFilter('#incomePropertyFilter', INCOME_PROPERTY_FILTER_KEY);
+  fillMovementPropertyFilter('#expensePropertyFilter', EXPENSE_PROPERTY_FILTER_KEY);
 }
 
-function expensePropertyLabel(property) {
+function fillMovementPropertyFilter(selector, storageKey) {
+  const filter = $(selector);
+  if (!filter) return;
+  const currentValue = filter.value || localStorage.getItem(storageKey) || '';
+  filter.innerHTML = `<option value="">Todos los edificios</option>${state.properties.map((property) => `<option value="${escapeAttr(property.id)}">${escapeHtml(buildingPropertyLabel(property))}</option>`).join('')}`;
+  filter.value = state.properties.some((property) => property.id === currentValue) ? currentValue : '';
+}
+
+function buildingPropertyLabel(property) {
   const address = String(property.address || '').trim();
   const building = address.match(/^(.+?\s+\d+)/)?.[1] || address || 'Edificio';
   return `${building} · Depto ${property.unit}`;
@@ -630,6 +648,10 @@ function bindEvents() {
   $('#expensePropertyFilter').addEventListener('change', (event) => {
     localStorage.setItem(EXPENSE_PROPERTY_FILTER_KEY, event.target.value);
     renderExpenses();
+  });
+  $('#incomePropertyFilter').addEventListener('change', (event) => {
+    localStorage.setItem(INCOME_PROPERTY_FILTER_KEY, event.target.value);
+    renderIncome();
   });
   $$('[data-open]').forEach((button) => button.addEventListener('click', () => {
     prepareCreateForm(button.dataset.open);
