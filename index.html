@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8" />
@@ -104,7 +104,20 @@
       </section>
 
       <section id="expenses" class="tab-panel">
-        <div class="section-head"><h2>Gastos operacionales</h2><button data-open="expenseDialog" data-admin-only hidden type="button">Agregar gasto</button></div>
+        <div class="section-head expense-heading">
+          <div>
+            <h2>Gastos operacionales</h2>
+            <p id="expenseFilterSummary" class="filter-summary" aria-live="polite"></p>
+          </div>
+          <div class="expense-tools">
+            <label class="expense-filter">Mostrar edificio
+              <select id="expensePropertyFilter" aria-label="Filtrar gastos por edificio">
+                <option value="">Todos los edificios</option>
+              </select>
+            </label>
+            <button data-open="expenseDialog" data-admin-only hidden type="button">Agregar gasto</button>
+          </div>
+        </div>
         <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Propiedad</th><th>Categoria</th><th>Detalle</th><th>Monto</th><th>Estado</th><th>Respaldo</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div>
       </section>
 
@@ -209,3 +222,4 @@
   <script src="app.js?v=20260807-3" type="module"></script>
 </body>
 </html>
+
