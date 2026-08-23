@@ -12,6 +12,12 @@ alter table public.portfolio_state enable row level security;
 
 -- La aplicación ofrece una vista pública de solo lectura. Para hacer todo el
 -- panel privado, elimina anon de este GRANT y de la política de lectura.
+revoke insert, update, delete, truncate, references, trigger
+on table public.portfolio_state from anon;
+
+revoke delete, truncate, references, trigger
+on table public.portfolio_state from authenticated;
+
 grant select on table public.portfolio_state to anon;
 grant select, insert, update on table public.portfolio_state to authenticated;
 
@@ -85,3 +91,4 @@ exception
   when duplicate_object then null;
 end
 $$;
+
