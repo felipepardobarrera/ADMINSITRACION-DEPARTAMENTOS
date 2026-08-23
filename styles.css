@@ -48,11 +48,11 @@ main { padding: 22px clamp(14px, 3vw, 42px) 42px; }
 .tab-panel.active { display: block; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .section-note { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
-.expense-heading { align-items: flex-end; }
-.expense-heading h2 { margin-bottom: 0; }
-.expense-tools { display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; }
-.expense-filter { min-width: 245px; color: var(--blue); font-weight: 700; }
-.expense-filter select { min-height: 42px; font-weight: 400; }
+.movement-heading { align-items: flex-end; }
+.movement-heading h2 { margin-bottom: 0; }
+.movement-tools { display: flex; align-items: flex-end; justify-content: flex-end; gap: 10px; }
+.property-filter { min-width: 245px; color: var(--blue); font-weight: 700; }
+.property-filter select { min-height: 42px; font-weight: 400; }
 .filter-summary { margin: 7px 0 0; color: var(--muted); font-size: 13px; }
 .cashflow-section { margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid var(--line); }
 .cashflow-kpis { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 10px; margin-bottom: 18px; }
@@ -168,9 +168,9 @@ dialog::backdrop { background: rgba(15, 23, 42, .45); }
   .chart-heading { align-items: flex-start; flex-direction: column; }
   .chart-row { grid-template-columns: 66px minmax(150px, 1fr); }
   .tab-panel { padding: 14px; }
-  .expense-heading, .expense-tools { align-items: stretch; flex-direction: column; }
-  .expense-tools { width: 100%; }
-  .expense-filter { min-width: 0; }
+  .movement-heading, .movement-tools { align-items: stretch; flex-direction: column; }
+  .movement-tools { width: 100%; }
+  .property-filter { min-width: 0; }
   .toast { right: 14px; bottom: 14px; }
 }
 
