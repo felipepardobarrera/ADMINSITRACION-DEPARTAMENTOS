@@ -15,8 +15,8 @@ validate:
   stage: test
   image: node:24-alpine
   script:
-    - npm install --omit=dev
-    - npm run check
+    - npm ci
+    - npm test
   rules:
     - if: '$CI_PIPELINE_SOURCE != "schedule"'
 
@@ -25,7 +25,7 @@ create-pages:
   image: alpine:3.22
   script:
     - mkdir public
-    - cp index.html app.js styles.css public/
+    - cp index.html app.js backup-utils.js styles.css public/
     - cp -r data public/data
   pages: true
   rules:
@@ -38,7 +38,7 @@ alertas-hipotecarias:
     ALERT_DAYS_BEFORE: "3"
     ALERT_TO: "FPARDO1996@GMAIL.COM"
   script:
-    - npm install --omit=dev
+    - npm ci --omit=dev
     - node scripts/send-reminders.mjs
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'

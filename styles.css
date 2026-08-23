@@ -27,6 +27,8 @@ h3 { margin: 0 0 8px; }
 .access-mode { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 8px 11px; border: 1px solid rgba(255,255,255,.32); border-radius: 6px; background: rgba(255,255,255,.12); font-size: 13px; font-weight: 700; }
 .access-mode::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #86efac; }
 .access-mode.admin::before { background: #fbbf24; }
+.sync-status { min-height: 40px; display: inline-flex; align-items: center; padding: 8px 11px; border-radius: 6px; background: rgba(255,255,255,.12); font-size: 12px; }
+.sync-status.offline { background: #7f1d1d; }
 .month-picker { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,.12); padding: 8px 10px; border-radius: 6px; }
 .month-picker input { border: 0; border-radius: 4px; padding: 6px; }
 .ghost-file { position: relative; overflow: hidden; display: inline-flex; align-items: center; }
@@ -131,6 +133,17 @@ dialog::backdrop { background: rgba(15, 23, 42, .45); }
 .auth-note { margin: 0; color: var(--muted); line-height: 1.45; }
 .auth-actions { flex-wrap: wrap; }
 .auth-actions .secondary { margin-right: auto; }
+.backup-center { width: min(700px, calc(100vw - 30px)); padding: 20px; }
+.backup-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.backup-heading p, .backup-help { margin: 6px 0 0; color: var(--muted); line-height: 1.45; }
+.backup-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0 10px; }
+.backup-help { padding: 12px; border-radius: 6px; background: var(--soft); font-size: 13px; }
+.backup-center h3 { margin: 20px 0 10px; font-size: 15px; }
+.restore-points { display: grid; gap: 8px; max-height: 310px; overflow-y: auto; }
+.restore-point { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 11px; border: 1px solid var(--line); border-radius: 6px; }
+.restore-point strong, .restore-point span { display: block; }
+.restore-point span { margin-top: 3px; color: var(--muted); font-size: 12px; }
+.empty-state.compact { margin: 0; padding: 14px; }
 [hidden] { display: none !important; }
 .note-box { border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: var(--soft); margin-top: 16px; max-width: 760px; }
 .note-box p { margin: 0; line-height: 1.5; color: var(--muted); }

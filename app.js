@@ -1,16 +1,19 @@
 ﻿const DATA_URL = './data/properties.json';
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.56.0/+esm';
+import { BACKUP_FORMAT_VERSION, cloneData, safeCsvCell, validateBackupDocument, validateState } from './backup-utils.js';
 
 const STORAGE_KEY = 'administracion-departamentos-v1';
 const LEGACY_RECOVERY_KEY = 'administracion-departamentos-recuperacion-v1';
 const MONTH_FILTER_KEY = 'administracion-departamentos-mes';
+const RESTORE_POINTS_KEY = 'administracion-departamentos-puntos-restauracion-v1';
+const RESTORE_POINTS_LIMIT = 8;
 const ATTACHMENT_DB_NAME = 'administracion-departamentos-archivos';
 const ATTACHMENT_STORE = 'respaldos';
 const MAX_ATTACHMENT_SIZE = 20 * 1024 * 1024;
 const SUPABASE_URL = 'https://hkvfqmzvuuseshroacqb.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_r7Nu9wLPFlG_pa4h0ig2jw_nKunjdXq';
 const ADMIN_EMAIL = 'fpardo1996@gmail.com';
-const PUBLIC_APP_URL = 'https://administracion-departamentos-publico-f73f00.gitlab.io/';
+const PUBLIC_APP_URL = new URL('.', window.location.href).href.split('#')[0];
 const CLOUD_ROW_ID = 'main';
 const DOCUMENT_BUCKET = 'documentos';
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -22,6 +25,8 @@ let toastTimer;
 let session = null;
 let isAdmin = false;
 let cloudSubscription = null;
+let lastCloudUpdate = null;
+let usingLocalCopy = false;
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
@@ -34,6 +39,7 @@ async function boot() {
   bindEvents();
   renderAll();
   applyAccessMode();
+  updateSyncStatus();
   subscribeToCloudUpdates();
   if (isPasswordRecoveryRedirect() && isAdmin) openPasswordDialog();
   showAuthRedirectError();
@@ -57,11 +63,14 @@ async function loadState() {
   const saved = localStorage.getItem(STORAGE_KEY);
   const localState = parseStoredState(saved);
   const { data, error } = await supabase.from('portfolio_state').select('data, updated_by').eq('id', CLOUD_ROW_ID).single();
-  if (!error && data?.data) {
+  const cloudIsEmpty = !error && data?.data && Array.isArray(data.data.properties) && data.data.properties.length === 0;
+  if (!error && data?.data && !cloudIsEmpty) {
     if (localState && hasMissingLocalRecords(localState, data.data)) {
       localStorage.setItem(LEGACY_RECOVERY_KEY, JSON.stringify({ state: localState, replaceSettings: !data.updated_by }));
     }
-    state = data.data;
+    state = validateState(data.data);
+    lastCloudUpdate = new Date();
+    usingLocalCopy = false;
     const recovery = parseStoredState(localStorage.getItem(LEGACY_RECOVERY_KEY));
     if (isAdmin && recovery?.state) {
       state = mergeRecoveredState(state, recovery);
@@ -76,7 +85,20 @@ async function loadState() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     return;
   }
-  state = localState || await fetch(DATA_URL).then((response) => response.json());
+  state = validateState(localState || await fetch(DATA_URL).then((response) => {
+    if (!response.ok) throw new Error('No fue posible cargar los datos iniciales.');
+    return response.json();
+  }));
+  usingLocalCopy = true;
+  if (cloudIsEmpty && isAdmin) {
+    await persist();
+    showToast('La nube estaba vacía y se inicializó con la copia disponible.');
+    return;
+  }
+  if (cloudIsEmpty) {
+    showToast('La nube está lista pero vacía. Ingresa como administrador para inicializarla.');
+    return;
+  }
   showToast('No fue posible conectar con la nube. Se muestra la ultima copia disponible.');
 }
 
@@ -118,27 +140,93 @@ function latestActivityMonth() {
 }
 
 async function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   if (!isAdmin) throw new Error('Solo el administrador puede guardar cambios.');
-  const { error } = await supabase.from('portfolio_state').update({
-    data: state,
+  const validState = validateState(state);
+  const { data, error } = await supabase.from('portfolio_state').update({
+    data: validState,
     updated_at: new Date().toISOString(),
     updated_by: session.user.id,
-  }).eq('id', CLOUD_ROW_ID);
+  }).eq('id', CLOUD_ROW_ID).select('id').single();
   if (error) throw error;
+  if (!data?.id) throw new Error('Supabase no confirmó la actualización. Revisa que exista la fila "main".');
+  state = validState;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  lastCloudUpdate = new Date();
+  usingLocalCopy = false;
+  updateSyncStatus();
 }
 
 function subscribeToCloudUpdates() {
   cloudSubscription?.unsubscribe();
   cloudSubscription = supabase.channel('portfolio-publico')
     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'portfolio_state', filter: `id=eq.${CLOUD_ROW_ID}` }, (payload) => {
-      state = payload.new.data;
+      state = validateState(payload.new.data);
+      lastCloudUpdate = new Date(payload.new.updated_at || Date.now());
+      usingLocalCopy = false;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
       renderAll();
       applyAccessMode();
       showToast('Informacion actualizada desde la nube.');
     })
     .subscribe();
+}
+
+function updateSyncStatus() {
+  const status = $('#syncStatus');
+  if (!status) return;
+  if (!navigator.onLine) {
+    status.textContent = 'Sin conexión · copia local';
+    status.className = 'sync-status offline';
+    return;
+  }
+  if (usingLocalCopy) {
+    status.textContent = 'Copia local · nube no disponible';
+    status.className = 'sync-status offline';
+    return;
+  }
+  status.textContent = lastCloudUpdate ? `Nube al día · ${lastCloudUpdate.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}` : 'Conectando con la nube…';
+  status.className = 'sync-status';
+}
+
+function saveRestorePoint(label, snapshot = state) {
+  const points = getRestorePoints();
+  points.unshift({ id: crypto.randomUUID(), createdAt: new Date().toISOString(), label, state: validateState(snapshot) });
+  localStorage.setItem(RESTORE_POINTS_KEY, JSON.stringify(points.slice(0, RESTORE_POINTS_LIMIT)));
+  renderRestorePoints();
+}
+
+function getRestorePoints() {
+  try {
+    const points = JSON.parse(localStorage.getItem(RESTORE_POINTS_KEY) || '[]');
+    return Array.isArray(points) ? points : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderRestorePoints() {
+  const container = $('#restorePoints');
+  if (!container) return;
+  const points = getRestorePoints();
+  container.innerHTML = points.length ? points.map((point) => `<article class="restore-point"><div><strong>${escapeHtml(point.label || 'Cambio')}</strong><span>${escapeHtml(new Date(point.createdAt).toLocaleString('es-CL'))}</span></div><button class="small secondary" data-restore-point="${escapeAttr(point.id)}" type="button">Restaurar</button></article>`).join('') : '<p class="empty-state compact">Todavía no hay puntos automáticos.</p>';
+}
+
+async function restoreLocalPoint(id) {
+  if (!requireAdmin()) return;
+  const point = getRestorePoints().find((item) => item.id === id);
+  if (!point || !confirm(`¿Restaurar el punto "${point.label}"? Se guardará una copia del estado actual.`)) return;
+  const previous = cloneData(state);
+  saveRestorePoint('Antes de restaurar un punto', previous);
+  state = validateState(point.state);
+  try {
+    await persist();
+    renderAll();
+    showToast('Punto de restauración aplicado y sincronizado.');
+  } catch (error) {
+    state = previous;
+    renderAll();
+    showToast(error.message || 'No fue posible restaurar el punto.');
+  }
 }
 
 function attachmentDb() {
@@ -239,9 +327,10 @@ function daysBetween(a, b) {
 }
 
 function addMonths(date, months) {
-  const copy = new Date(date);
-  copy.setMonth(copy.getMonth() + months);
-  return copy;
+  const target = new Date(date.getFullYear(), date.getMonth() + months, 1);
+  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
+  target.setDate(Math.min(date.getDate(), lastDay));
+  return target;
 }
 
 function nextDueDate(mortgage, from = new Date()) {
@@ -392,7 +481,7 @@ function renderDepartmentDashboard() {
     return `<article class="department-panel">
       <div class="department-panel-head">
         <div><span class="unit-label">Departamento ${escapeHtml(property.unit)}</span><h3>${escapeHtml(property.address)}</h3></div>
-        <span class="badge">${escapeHtml(property.status)}</span>
+        <span class="badge">${escapeHtml(property.status || '')}</span>
       </div>
       <div class="department-metrics">
         <div><span>Ingreso mes</span><strong>${fmtMoney.format(incomeMonth)}</strong></div>
@@ -427,7 +516,7 @@ function renderAlerts() {
     const cls = item.daysLeft <= 3 ? 'danger' : item.daysLeft <= 10 ? 'warning' : '';
     const date = fmtDate.format(parseLocalDate(item.dueDate));
     const amount = item.referenceDividendClp ? fmtMoney.format(item.referenceDividendClp) : `${item.referenceDividendUf.toLocaleString('es-CL')} UF`;
-    return `<article class="alert-card ${cls}"><strong>${item.bank} ${item.operation} - ${propertyName(item.propertyId)}</strong><p>Vence ${date}. Faltan ${item.daysLeft} dias. Dividendo referencial: ${amount}.</p></article>`;
+    return `<article class="alert-card ${cls}"><strong>${escapeHtml(item.bank || '')} ${escapeHtml(item.operation || '')} - ${escapeHtml(propertyName(item.propertyId))}</strong><p>Vence ${escapeHtml(date)}. Faltan ${item.daysLeft} días. Dividendo referencial: ${escapeHtml(amount)}.</p></article>`;
   }).join('');
 }
 
@@ -435,7 +524,7 @@ function renderPropertyResults() {
   const rows = state.properties.map((property) => {
     const income = sum(byMonth(state.income).filter((row) => row.propertyId === property.id && row.status === 'Pagado'));
     const expenses = sum(byMonth(state.expenses).filter((row) => row.propertyId === property.id && row.status === 'Pagado'));
-    return `<tr><td>${propertyName(property.id)}</td><td class="numeric">${fmtMoney.format(income)}</td><td class="numeric">${fmtMoney.format(expenses)}</td><td class="numeric">${fmtMoney.format(income - expenses)}</td></tr>`;
+    return `<tr><td>${escapeHtml(propertyName(property.id))}</td><td class="numeric">${fmtMoney.format(income)}</td><td class="numeric">${fmtMoney.format(expenses)}</td><td class="numeric">${fmtMoney.format(income - expenses)}</td></tr>`;
   });
   $('#propertyResults').innerHTML = rows.join('');
 }
@@ -443,7 +532,7 @@ function renderPropertyResults() {
 function renderProperties() {
   $('#propertyCards').innerHTML = state.properties.map((property, index) => `
     <article class="property-card" data-index="${index}">
-      <div class="card-head"><div><h3>${propertyName(property.id)}</h3><span class="badge">${property.status}</span></div><strong>${property.role}</strong></div>
+      <div class="card-head"><div><h3>${escapeHtml(propertyName(property.id))}</h3><span class="badge">${escapeHtml(property.status || '')}</span></div><strong>${escapeHtml(property.role || '')}</strong></div>
       <div class="form-grid">
         <label>Direccion <input data-field="address" value="${escapeAttr(property.address)}"></label>
         <label>Comuna <input data-field="commune" value="${escapeAttr(property.commune)}"></label>
@@ -461,7 +550,7 @@ function renderMortgages() {
   $('#mortgageCards').innerHTML = state.mortgages.map((mortgage, index) => {
     const due = nextDueDate(mortgage);
     return `<article class="property-card" data-index="${index}">
-      <div class="card-head"><div><h3>${mortgage.bank} ${mortgage.operation}</h3><span class="badge">${propertyName(mortgage.propertyId)}</span></div><strong>${fmtDate.format(due)}</strong></div>
+      <div class="card-head"><div><h3>${escapeHtml(mortgage.bank || '')} ${escapeHtml(mortgage.operation || '')}</h3><span class="badge">${escapeHtml(propertyName(mortgage.propertyId))}</span></div><strong>${fmtDate.format(due)}</strong></div>
       <div class="form-grid">
         <label>Banco <input data-field="bank" value="${escapeAttr(mortgage.bank)}"></label>
         <label>Operacion <input data-field="operation" value="${escapeAttr(mortgage.operation)}"></label>
@@ -476,17 +565,17 @@ function renderMortgages() {
 }
 
 function renderIncome() {
-  $('#incomeRows').innerHTML = [...state.income].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.tenant || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${escapeHtml(row.notes || '')}</td><td>${attachmentCell(row)}</td><td>${isAdmin ? `<div class="row-actions"><button class="small secondary" data-edit-income="${row.id}" type="button">Editar</button><button class="small danger" data-delete-income="${row.id}" type="button">Eliminar</button></div>` : ''}</td></tr>`).join('');
+  $('#incomeRows').innerHTML = [...state.income].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(propertyName(row.propertyId))}</td><td>${escapeHtml(row.tenant || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${escapeHtml(row.status || '')}</td><td>${escapeHtml(row.notes || '')}</td><td>${attachmentCell(row)}</td><td>${isAdmin ? `<div class="row-actions"><button class="small secondary" data-edit-income="${escapeAttr(row.id)}" type="button">Editar</button><button class="small danger" data-delete-income="${escapeAttr(row.id)}" type="button">Eliminar</button></div>` : ''}</td></tr>`).join('');
 }
 
 function renderExpenses() {
-  $('#expenseRows').innerHTML = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${row.date}</td><td>${propertyName(row.propertyId)}</td><td>${escapeHtml(row.category || '')}</td><td>${escapeHtml(row.detail || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${row.status}</td><td>${attachmentCell(row)}</td><td>${isAdmin ? `<div class="row-actions"><button class="small secondary" data-edit-expense="${row.id}" type="button">Editar</button><button class="small danger" data-delete-expense="${row.id}" type="button">Eliminar</button></div>` : ''}</td></tr>`).join('');
+  $('#expenseRows').innerHTML = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date)).map((row) => `<tr><td>${escapeHtml(row.date)}</td><td>${escapeHtml(propertyName(row.propertyId))}</td><td>${escapeHtml(row.category || '')}</td><td>${escapeHtml(row.detail || '')}</td><td class="numeric">${fmtMoney.format(row.amount || 0)}</td><td>${escapeHtml(row.status || '')}</td><td>${attachmentCell(row)}</td><td>${isAdmin ? `<div class="row-actions"><button class="small secondary" data-edit-expense="${escapeAttr(row.id)}" type="button">Editar</button><button class="small danger" data-delete-expense="${escapeAttr(row.id)}" type="button">Eliminar</button></div>` : ''}</td></tr>`).join('');
 }
 
 function attachmentCell(row) {
   if (!row.attachment) return '<span class="no-attachment">Sin archivo</span>';
   if (!isAdmin) return '<span class="no-attachment">Respaldo privado</span>';
-  return `<div class="attachment-actions"><span title="${escapeAttr(row.attachment.name)}">${escapeHtml(row.attachment.name)}</span><div><button class="small secondary" data-open-attachment="${row.id}" type="button">Abrir</button><button class="small secondary" data-download-attachment="${row.id}" type="button">Descargar</button></div></div>`;
+  return `<div class="attachment-actions"><span title="${escapeAttr(row.attachment.name)}">${escapeHtml(row.attachment.name)}</span><div><button class="small secondary" data-open-attachment="${escapeAttr(row.id)}" type="button">Abrir</button><button class="small secondary" data-download-attachment="${escapeAttr(row.id)}" type="button">Descargar</button></div></div>`;
 }
 
 function renderReports() {
@@ -498,7 +587,7 @@ function renderReports() {
 
 function fillPropertyOptions() {
   $$('select[name="propertyId"]').forEach((select) => {
-    select.innerHTML = state.properties.map((property) => `<option value="${property.id}">${propertyName(property.id)}</option>`).join('');
+    select.innerHTML = state.properties.map((property) => `<option value="${escapeAttr(property.id)}">${escapeHtml(propertyName(property.id))}</option>`).join('');
   });
 }
 
@@ -522,6 +611,7 @@ function bindEvents() {
   $('#expenseForm').addEventListener('submit', addExpense);
   $('#saveProperties').addEventListener('click', saveProperties);
   $('#saveMortgages').addEventListener('click', saveMortgages);
+  $('#openBackups').addEventListener('click', () => { renderRestorePoints(); $('#backupDialog').showModal(); });
   $('#exportBackup').addEventListener('click', exportBackup);
   $('#importBackup').addEventListener('change', importBackup);
   $('#authButton').addEventListener('click', handleAuthButton);
@@ -532,6 +622,8 @@ function bindEvents() {
   $('#downloadCashflow').addEventListener('click', () => downloadCsv('flujo-de-caja.csv', cashFlowRows()));
   $('#downloadCalendar').addEventListener('click', () => downloadCsv('vencimientos.csv', alertRows()));
   $('#downloadAll').addEventListener('click', () => downloadCsv('administracion-completa.csv', allRows()));
+  window.addEventListener('online', updateSyncStatus);
+  window.addEventListener('offline', updateSyncStatus);
   document.addEventListener('click', async (event) => {
     const openButton = event.target.closest('[data-open-attachment]');
     const downloadButton = event.target.closest('[data-download-attachment]');
@@ -539,19 +631,27 @@ function bindEvents() {
     const editExpenseButton = event.target.closest('[data-edit-expense]');
     const incomeButton = event.target.closest('[data-delete-income]');
     const expenseButton = event.target.closest('[data-delete-expense]');
+    const restoreButton = event.target.closest('[data-restore-point]');
     if (openButton) await openAttachment(openButton.dataset.openAttachment, false);
     if (downloadButton) await openAttachment(downloadButton.dataset.downloadAttachment, true);
     if (editIncomeButton) editIncome(editIncomeButton.dataset.editIncome);
     if (editExpenseButton) editExpense(editExpenseButton.dataset.editExpense);
+    if (restoreButton) await restoreLocalPoint(restoreButton.dataset.restorePoint);
     if (incomeButton) {
       if (!requireAdmin()) return;
       const id = incomeButton.dataset.deleteIncome;
       const record = state.income.find((row) => row.id === id);
+      if (!record || !confirm(`¿Eliminar el ingreso de ${fmtMoney.format(record.amount || 0)}? Esta acción puede revertirse desde Respaldos.`)) return;
+      const previous = cloneData(state);
+      saveRestorePoint('Antes de eliminar un ingreso', previous);
       state.income = state.income.filter((row) => row.id !== id);
-      await deleteAttachment(id, record?.attachment).catch(() => {});
       try {
-        await persist(); renderAll(); applyAccessMode(); showToast('Ingreso eliminado.');
+        await persist();
+        await deleteAttachment(id, record?.attachment).catch(() => {});
+        renderAll(); applyAccessMode(); showToast('Ingreso eliminado.');
       } catch (error) {
+        state = previous;
+        renderAll(); applyAccessMode();
         showToast(error.message || 'No fue posible eliminar el ingreso.');
       }
     }
@@ -559,11 +659,17 @@ function bindEvents() {
       if (!requireAdmin()) return;
       const id = expenseButton.dataset.deleteExpense;
       const record = state.expenses.find((row) => row.id === id);
+      if (!record || !confirm(`¿Eliminar el gasto de ${fmtMoney.format(record.amount || 0)}? Esta acción puede revertirse desde Respaldos.`)) return;
+      const previous = cloneData(state);
+      saveRestorePoint('Antes de eliminar un gasto', previous);
       state.expenses = state.expenses.filter((row) => row.id !== id);
-      await deleteAttachment(id, record?.attachment).catch(() => {});
       try {
-        await persist(); renderAll(); applyAccessMode(); showToast('Egreso eliminado.');
+        await persist();
+        await deleteAttachment(id, record?.attachment).catch(() => {});
+        renderAll(); applyAccessMode(); showToast('Egreso eliminado.');
       } catch (error) {
+        state = previous;
+        renderAll(); applyAccessMode();
         showToast(error.message || 'No fue posible eliminar el egreso.');
       }
     }
@@ -577,7 +683,7 @@ function requireAdmin() {
 }
 
 function applyAccessMode() {
-  $('#accessMode').textContent = isAdmin ? 'Modo administrador' : 'Vista publica';
+  $('#accessMode').textContent = isAdmin ? 'Modo administrador' : 'Vista pública';
   $('#accessMode').classList.toggle('admin', isAdmin);
   $('#authButton').textContent = isAdmin ? 'Cerrar sesion' : 'Ingresar';
   $$('[data-admin-only]').forEach((element) => { element.hidden = !isAdmin; });
@@ -723,6 +829,7 @@ async function addIncome(event) {
   const existingIndex = state.income.findIndex((row) => row.id === recordId);
   const existing = existingIndex >= 0 ? state.income[existingIndex] : null;
   const id = existing?.id || crypto.randomUUID();
+  const previous = cloneData(state);
   let attachment;
   try {
     attachment = await attachmentFromForm(form, id, existing?.attachment || null);
@@ -736,9 +843,14 @@ async function addIncome(event) {
   $('#monthFilter').value = monthKey(date);
   localStorage.setItem(MONTH_FILTER_KEY, monthKey(date));
   try {
+    saveRestorePoint(existing ? 'Antes de editar un ingreso' : 'Antes de agregar un ingreso', previous);
     await persist(); formElement.reset(); $('#incomeDialog').close(); renderAll(); applyAccessMode();
+    if (existing?.attachment?.path && attachment?.path !== existing.attachment.path) await deleteAttachment(id, existing.attachment).catch(() => {});
     showToast(existing ? `Ingreso actualizado a ${fmtMoney.format(amount)}.` : `Ingreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
   } catch (error) {
+    state = previous;
+    if (attachment?.path && attachment.path !== existing?.attachment?.path) await supabase.storage.from(DOCUMENT_BUCKET).remove([attachment.path]).catch(() => {});
+    renderAll(); applyAccessMode();
     showToast(error.message || 'No fue posible guardar el ingreso en la nube.');
   }
 }
@@ -754,6 +866,7 @@ async function addExpense(event) {
   const existingIndex = state.expenses.findIndex((row) => row.id === recordId);
   const existing = existingIndex >= 0 ? state.expenses[existingIndex] : null;
   const id = existing?.id || crypto.randomUUID();
+  const previous = cloneData(state);
   let attachment;
   try {
     attachment = await attachmentFromForm(form, id, existing?.attachment || null);
@@ -767,9 +880,14 @@ async function addExpense(event) {
   $('#monthFilter').value = monthKey(date);
   localStorage.setItem(MONTH_FILTER_KEY, monthKey(date));
   try {
+    saveRestorePoint(existing ? 'Antes de editar un gasto' : 'Antes de agregar un gasto', previous);
     await persist(); formElement.reset(); $('#expenseDialog').close(); renderAll(); applyAccessMode();
+    if (existing?.attachment?.path && attachment?.path !== existing.attachment.path) await deleteAttachment(id, existing.attachment).catch(() => {});
     showToast(existing ? `Egreso actualizado a ${fmtMoney.format(amount)}.` : `Egreso de ${fmtMoney.format(amount)} guardado en ${formatMonth(monthKey(date))}.`);
   } catch (error) {
+    state = previous;
+    if (attachment?.path && attachment.path !== existing?.attachment?.path) await supabase.storage.from(DOCUMENT_BUCKET).remove([attachment.path]).catch(() => {});
+    renderAll(); applyAccessMode();
     showToast(error.message || 'No fue posible guardar el egreso en la nube.');
   }
 }
@@ -779,7 +897,6 @@ async function attachmentFromForm(form, id, currentAttachment = null) {
   if (!(file instanceof File) || !file.size) return currentAttachment;
   if (file.size > MAX_ATTACHMENT_SIZE) throw new Error('El respaldo supera el maximo permitido de 20 MB.');
   const path = await saveAttachment(id, file);
-  if (currentAttachment?.path) await supabase.storage.from(DOCUMENT_BUCKET).remove([currentAttachment.path]);
   return { name: file.name, type: file.type, size: file.size, path };
 }
 
@@ -814,26 +931,32 @@ function showToast(message) {
 
 async function saveProperties() {
   if (!requireAdmin()) return;
+  const previous = cloneData(state);
   $$('#propertyCards .property-card').forEach((card) => {
     const property = state.properties[Number(card.dataset.index)];
     $$('[data-field]', card).forEach((input) => property[input.dataset.field] = input.type === 'number' ? Number(input.value) : input.value);
   });
   try {
+    saveRestorePoint('Antes de editar propiedades', previous);
     await persist(); renderAll(); applyAccessMode(); showToast('Propiedades guardadas en la nube.');
   } catch (error) {
+    state = previous; renderAll(); applyAccessMode();
     showToast(error.message || 'No fue posible guardar las propiedades.');
   }
 }
 
 async function saveMortgages() {
   if (!requireAdmin()) return;
+  const previous = cloneData(state);
   $$('#mortgageCards .property-card').forEach((card) => {
     const mortgage = state.mortgages[Number(card.dataset.index)];
     $$('[data-field]', card).forEach((input) => mortgage[input.dataset.field] = input.type === 'number' ? Number(input.value) : input.value);
   });
   try {
+    saveRestorePoint('Antes de editar dividendos', previous);
     await persist(); renderAll(); applyAccessMode(); showToast('Dividendos guardados en la nube.');
   } catch (error) {
+    state = previous; renderAll(); applyAccessMode();
     showToast(error.message || 'No fue posible guardar los dividendos.');
   }
 }
@@ -849,7 +972,7 @@ async function exportBackup() {
       // The financial records remain usable even if an old local file is unavailable.
     }
   }
-  const backup = { formatVersion: 2, exportedAt: new Date().toISOString(), state, attachments };
+  const backup = { formatVersion: BACKUP_FORMAT_VERSION, exportedAt: new Date().toISOString(), state: validateState(state), attachments };
   downloadFile(`respaldo-administracion-${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(backup, null, 2), 'application/json');
   showToast('Respaldo completo generado.');
 }
@@ -859,15 +982,29 @@ async function importBackup(event) {
   const file = event.target.files[0];
   if (!file) return;
   try {
-    const backup = JSON.parse(await file.text());
-    state = backup.state || backup;
+    if (file.size > 140 * 1024 * 1024) throw new Error('El archivo de respaldo supera el límite de 140 MB.');
+    const backup = validateBackupDocument(JSON.parse(await file.text()));
+    if (!confirm(`El respaldo contiene ${backup.state.income.length} ingresos, ${backup.state.expenses.length} gastos y ${Object.keys(backup.attachments).length} archivos. ¿Reemplazar los datos actuales?`)) return;
+    const previous = cloneData(state);
+    saveRestorePoint('Antes de importar un respaldo', previous);
+    const uploadedPaths = [];
+    const importedState = backup.state;
     for (const [id, attachment] of Object.entries(backup.attachments || {})) {
       const attachmentFile = dataUrlToFile(attachment.data, attachment.name, attachment.type);
       const path = await saveAttachment(id, attachmentFile);
-      const record = [...state.income, ...state.expenses].find((item) => item.id === id);
+      uploadedPaths.push(path);
+      const record = [...importedState.income, ...importedState.expenses].find((item) => item.id === id);
       if (record) record.attachment = { name: attachment.name, type: attachment.type, size: attachmentFile.size, path };
     }
-    await persist(); renderAll(); applyAccessMode();
+    state = importedState;
+    try {
+      await persist();
+    } catch (error) {
+      state = previous;
+      if (uploadedPaths.length) await supabase.storage.from(DOCUMENT_BUCKET).remove(uploadedPaths).catch(() => {});
+      throw error;
+    }
+    renderAll(); applyAccessMode();
     showToast('Respaldo importado y sincronizado en la nube.');
   } catch (error) {
     showToast(error.message || 'El archivo de respaldo no es valido.');
@@ -913,7 +1050,7 @@ function allRows() {
 }
 
 function downloadCsv(filename, rows) {
-  const csv = rows.map((row) => row.map((cell) => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
+  const csv = rows.map((row) => row.map((cell) => `"${String(safeCsvCell(cell) ?? '').replaceAll('"', '""')}"`).join(',')).join('\n');
   downloadFile(filename, csv, 'text/csv;charset=utf-8');
 }
 

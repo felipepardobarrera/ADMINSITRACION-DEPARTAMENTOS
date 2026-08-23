@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Administracion de Departamentos</title>
+  <title>Administración de Departamentos</title>
   <meta name="description" content="Control de propiedades, arriendos, dividendos y gastos operacionales." />
   <link rel="stylesheet" href="styles.css?v=20260807-1" />
 </head>
@@ -11,13 +11,13 @@
   <header class="topbar">
     <div>
       <p class="eyebrow">Control patrimonial</p>
-      <h1>Administracion de Departamentos</h1>
+      <h1>Administración de Departamentos</h1>
     </div>
     <div class="top-actions">
-      <span id="accessMode" class="access-mode">Vista publica</span>
+      <span id="accessMode" class="access-mode">Vista pública</span>
+      <span id="syncStatus" class="sync-status">Conectando con la nube…</span>
       <label class="month-picker">Mes <input id="monthFilter" type="month" /></label>
-      <button id="exportBackup" data-admin-only hidden type="button">Exportar respaldo</button>
-      <label class="ghost-file" data-admin-only hidden>Importar respaldo<input id="importBackup" type="file" accept="application/json" /></label>
+      <button id="openBackups" data-admin-only hidden type="button">Respaldos</button>
       <button id="authButton" class="secondary" type="button">Ingresar</button>
     </div>
   </header>
@@ -187,6 +187,22 @@
         <button type="submit">Guardar contrasena</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="backupDialog">
+    <section class="backup-center">
+      <div class="backup-heading">
+        <div><h2>Centro de respaldos</h2><p>Descarga una copia completa o vuelve a un punto automático reciente.</p></div>
+        <button class="small secondary" type="button" data-close aria-label="Cerrar">Cerrar</button>
+      </div>
+      <div class="backup-actions">
+        <button id="exportBackup" type="button">Descargar respaldo JSON</button>
+        <label class="ghost-file">Importar y reemplazar<input id="importBackup" type="file" accept="application/json,.json" /></label>
+      </div>
+      <p class="backup-help">El JSON es editable, pero conserva los nombres de las listas y campos. Antes de importar se valida el archivo, se muestra su contenido y se crea un punto de restauración.</p>
+      <h3>Puntos automáticos de este navegador</h3>
+      <div id="restorePoints" class="restore-points"></div>
+    </section>
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
