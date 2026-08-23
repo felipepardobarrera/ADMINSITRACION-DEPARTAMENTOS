@@ -1,78 +1,78 @@
-﻿# Administracion de Departamentos
+# Administración de Departamentos
 
-Sistema personal para controlar propiedades, dividendos hipotecarios, ingresos por arriendo, gastos operacionales y alertas por vencimiento.
+Panel web para administrar propiedades, arriendos, gastos, dividendos hipotecarios y sus documentos de respaldo. Funciona en computador y teléfono, sincroniza los datos mediante Supabase y conserva una copia local cuando la nube no está disponible.
 
-## Que incluye
+## Uso rápido
 
-- Panel mensual por propiedad.
-- Registro de ingresos por arriendo.
-- Registro de gastos: dividendos, contribuciones, gastos comunes, seguros, mantenciones y otros.
-- Control de proximos vencimientos hipotecarios.
-- Informacion sincronizada entre computadores mediante Supabase.
-- Vista publica de solo lectura y acceso privado de administrador.
-- Respaldos documentales privados en la nube.
-- Importacion y exportacion de respaldo JSON.
-- Exportacion CSV para revisar en Excel.
-- Alerta automatica por correo 3 dias antes del vencimiento del dividendo mediante GitHub Actions.
+1. Abre el sitio publicado.
+2. Elige el mes en la parte superior.
+3. Revisa el panel, los resultados por departamento y los próximos vencimientos.
+4. Pulsa **Ingresar** para agregar o editar información.
+5. Antes de terminar, entra en **Respaldos** y descarga una copia JSON periódicamente.
 
-## Datos iniciales cargados
+La barra superior indica si los datos están al día en la nube o si se está mostrando una copia local.
 
-- DEP-507: COLON 6435 DP 507, rol 2902-522, credito BCI operacion 0614733.
-- DEP-509: MARIA 6470 509, rol 703-88, credito Itau operacion 02162445.
+## Funciones principales
+
+- Resumen mensual y flujo de caja acumulado.
+- Resultado individual por propiedad.
+- Registro editable de ingresos y gastos.
+- Archivos privados de respaldo de hasta 20 MB por movimiento.
+- Próximos vencimientos hipotecarios y exportación de calendario.
+- Informes CSV compatibles con Excel.
+- Alertas diarias por correo tres días antes de un vencimiento.
+- Vista pública de consulta y sesión privada de administrador.
+
+## Respaldos y restauración
+
+El botón **Respaldos** está disponible al iniciar sesión como administrador.
+
+- **Descargar respaldo JSON** crea una copia completa de los registros y adjuntos disponibles. El archivo es legible y editable; se deben conservar los nombres de campos y listas.
+- **Importar y reemplazar** valida la versión, estructura, fechas, montos, propiedades y tamaños antes de cambiar información. La aplicación muestra un resumen y pide confirmación.
+- **Puntos automáticos** conservan las últimas ocho versiones en el navegador antes de agregar, editar, eliminar, importar o restaurar. Si la sincronización falla, el cambio se revierte.
+- Los CSV neutralizan fórmulas peligrosas antes de abrirse en una hoja de cálculo.
+
+Los puntos automáticos pertenecen solamente al navegador actual. El JSON descargado es la copia portátil que debe guardarse en otro lugar seguro.
+
+## Configuración de Supabase
+
+La aplicación usa el proyecto indicado en `app.js`. La clave incluida es una clave publicable para navegador; nunca se debe agregar una clave secreta o `service_role` al repositorio.
+
+1. Abre el editor SQL del proyecto Supabase.
+2. Ejecuta [supabase-schema.sql](supabase-schema.sql).
+3. Crea en Authentication el usuario administrador `fpardo1996@gmail.com`.
+4. Confirma que la URL publicada esté permitida en **Authentication > URL Configuration**.
+
+El SQL es idempotente: puede volver a ejecutarse sin duplicar políticas. Activa RLS, crea la fila `main`, configura el bucket privado `documentos` y concede solo los permisos necesarios.
+
+> Privacidad: la configuración actual permite lectura pública de los datos financieros del panel, sin acceso público a los adjuntos. Para un panel totalmente privado, elimina `anon` del permiso y de la política de lectura señalados en `supabase-schema.sql`, y adapta la pantalla pública.
 
 ## Alertas por correo
 
-El flujo `.github/workflows/alertas-hipotecarias.yml` revisa diariamente los dividendos que vencen en 3 dias y envia correo a `FPARDO1996@GMAIL.COM`.
+El flujo [.github/workflows/alertas-hipotecarias.yml](.github/workflows/alertas-hipotecarias.yml) se ejecuta diariamente. Primero consulta el estado actual de Supabase; si el servicio no responde, usa `data/properties.json` como copia de contingencia.
 
-Para activar el envio real, agrega este secreto en GitHub: `Settings > Secrets and variables > Actions > New repository secret`.
+Configura en **Settings > Secrets and variables > Actions**:
 
-- `SMTP_PASS`: clave de aplicacion de Gmail para `FPARDO1996@GMAIL.COM`.
+- `SMTP_PASS` (obligatorio): clave de aplicación de Gmail, no la contraseña normal.
+- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_FROM` y `ALERT_TO` (opcionales).
+- `SUPABASE_URL` y `SUPABASE_PUBLISHABLE_KEY` (opcionales mientras coincidan con los valores públicos del proyecto).
 
-El servidor `smtp.gmail.com`, el puerto `465`, el usuario y el destinatario ya estan configurados. `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_FROM` y `ALERT_TO` quedan disponibles solo como ajustes opcionales.
+Para probar el correo: **Actions > Alertas hipotecarias > Run workflow > enviar_prueba = true**.
 
-En Gmail debes crear una clave de aplicacion, no usar tu clave normal.
+## Desarrollo local
 
-Para probarlo manualmente, entra en GitHub a `Actions > Alertas hipotecarias > Run workflow` y selecciona `enviar_prueba = true`. Si los secretos estan correctos, deberia llegar un correo de prueba aunque no exista un vencimiento exactamente a 3 dias.
+Requiere Node.js 20 o superior.
 
-## Publicacion en GitHub Pages
+```bash
+npm ci
+npm test
+npm start
+```
 
-GitHub Pages publica automaticamente el sitio desde la rama `main`. No se necesita un segundo flujo de publicacion.
+`npm test` ejecuta pruebas de validación de respaldos, seguridad CSV/HTML, cálculo de fechas y sintaxis. Las dependencias están fijadas en `package-lock.json` y `npm audit` debe terminar sin vulnerabilidades.
 
-## Publicacion en GitLab Pages
+## Publicación
 
-El archivo `.gitlab-ci.yml` comprueba el sistema y publica el sitio automaticamente desde la rama principal.
-
-Enlace publico: https://administracion-departamentos-publico-f73f00.gitlab.io/
-
-Para activar las alertas en GitLab:
-
-1. Agrega `SMTP_PASS` en `Settings > CI/CD > Variables` como variable enmascarada.
-2. Crea una programacion diaria en `Build > Pipeline schedules` para la rama principal.
-3. Usa la zona horaria `America/Santiago` y un horario como `15 9 * * *`.
-
-GitHub puede mantenerse como respaldo del mismo repositorio.
-
-## Acceso y sincronizacion
-
-El sitio publicado muestra la informacion financiera en modo de solo lectura. Para modificarla, pulsa `Ingresar` e inicia sesion con `FPARDO1996@GMAIL.COM`.
-
-Si no recuerdas tu clave, pulsa `Olvide mi contrasena`. Usa solamente el enlace del correo mas reciente y el sitio te pedira crear una contrasena nueva de al menos 8 caracteres.
-
-Los ingresos, gastos, propiedades y dividendos se guardan en Supabase. Los archivos adjuntos se almacenan en un espacio privado y solo el administrador puede abrirlos o descargarlos.
-
-### Recuperar registros del computador anterior
-
-Los datos que se ingresaron antes de activar la nube permanecen en el navegador de ese computador. Para trasladarlos:
-
-1. Abre el sistema en el computador anterior.
-2. Ingresa como administrador.
-3. El sistema detectara los movimientos anteriores y los sincronizara automaticamente.
-4. Pulsa `Exportar respaldo` para conservar ademas una copia independiente.
-
-Si prefieres hacerlo manualmente, exporta el respaldo desde el computador anterior y usa `Importar respaldo` en el nuevo.
-
-La importacion sincroniza los registros y los archivos adjuntos con la nube. Conviene conservar el archivo exportado como copia adicional.
-
-## Uso diario
-
-Abre el sitio publicado, inicia sesion cuando necesites editar y usa `Exportar respaldo` periodicamente para guardar una copia adicional de tus datos.
+- GitHub Pages puede publicar la rama `main` directamente.
+- `.gitlab-ci.yml` mantiene compatibilidad con GitLab Pages.
+- El enlace de recuperación de contraseña se calcula desde el dominio abierto, por lo que funciona en ambos despliegues si la URL está autorizada en Supabase.

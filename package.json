@@ -1,17 +1,18 @@
-﻿{
+{
   "name": "administracion-departamentos",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Sistema de control de propiedades, arriendos, gastos y alertas hipotecarias.",
   "type": "module",
   "scripts": {
-    "start": "npx serve .",
-    "check": "node --check app.js && node --check scripts/send-reminders.mjs"
+    "start": "serve .",
+    "check": "node --check app.js && node --check backup-utils.js && node --check scripts/send-reminders.mjs",
+    "test": "node --test tests/*.test.mjs && npm run check"
   },
   "dependencies": {
-    "nodemailer": "^9.0.3"
+    "nodemailer": "9.0.3"
   },
   "devDependencies": {
-    "serve": "^14.2.4"
+    "serve": "14.2.6"
   }
 }

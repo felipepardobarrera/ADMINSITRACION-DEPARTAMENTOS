@@ -18,6 +18,9 @@ concurrency:
   group: alertas-hipotecarias
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   alertas:
     runs-on: ubuntu-latest
@@ -29,8 +32,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Instalar dependencias
-        run: npm install --omit=dev
+      - name: Instalar dependencias reproducibles
+        run: npm ci --omit=dev
+      - name: Comprobar código y pruebas
+        run: npm test
       - name: Revisar vencimientos y enviar correo
         run: node scripts/send-reminders.mjs
         env:
